@@ -48,6 +48,10 @@ GNU General Public License for more details.
 #include "common/com_strings.h"
 #include "common/protocol.h"
 
+#if XASH_EMSCRIPTEN
+#include <emscripten.h>
+#endif
+
 #define FILE_COPY_SIZE		(1024 * 1024)
 #define SAVE_AGED_COUNT 2 // the default count of quick and auto saves
 
@@ -1934,6 +1938,7 @@ file_t *FS_SysOpen( const char *filepath, const char *mode )
 
 	file = (file_t *)Mem_Calloc( fs_mempool, sizeof( *file ));
 	file->filetime = memfile ? 0 : FS_SysFileTime( filepath );
+	file->mod = mod | opt;
 	file->ungetc = EOF;
 	file->handle = fd;
 
@@ -2323,8 +2328,17 @@ int FS_Close( file_t *file )
 
 	if( file->handle >= 0 )
 	{
-		if( close( file->handle ))
+		if( close( file->handle )) {
 			return EOF;
+		}
+#if XASH_EMSCRIPTEN
+		if ( ( file->mod & O_WRONLY ) || ( file->mod & O_RDWR ) ) {
+			EM_ASM( { Module.callbacks?.fsSyncRequired?.({
+				path: 'not_implemented', // todo: resolve filename
+				op: 'write'
+			}) } );
+		}
+#endif //XASH_EMSCRIPTEN
 	}
 
 	if( file->ztk )
@@ -3237,6 +3251,12 @@ qboolean GAME_EXPORT FS_Delete( const char *path )
 		Con_Printf( "%s: failed to delete file %s (%s): %s\n", __func__, real_path, path, strerror( errno ));
 		return false;
 	}
+#if XASH_EMSCRIPTEN
+	EM_ASM({ Module.callbacks?.fsSyncRequired?.({
+		path: UTF8ToString($0),
+		op: 'delete'
+	}) }, real_path);
+#endif
 
 	return true;
 }
