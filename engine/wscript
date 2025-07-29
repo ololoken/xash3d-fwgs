@@ -272,6 +272,7 @@ def build(bld):
 		if bld.env.DEST_OS == 'emscripten':
 			linkflags = [ '-sENVIRONMENT=web', '-sAUTO_JS_LIBRARIES=0',
 						  '-lidbfs.js', '-lwebgl.js', '-lopenal.js', '-lasync.js', '-sNO_POLYFILL',
+						  '--js-library=../engine/platform/emscripten/net_emscripten.js',
 						  '-sINITIAL_MEMORY=512mb', '-sSTACK_SIZE=32mb', '-sALLOW_MEMORY_GROWTH=1',
 						  '-sMAX_WEBGL_VERSION=2', '-sMIN_WEBGL_VERSION=2', '-sFULL_ES2', # works ok with gl2shim
 						  '-sEXPORT_ALL', '-sEXPORTED_RUNTIME_METHODS=callMain,addRunDependency,removeRunDependency',
