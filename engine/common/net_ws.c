@@ -24,6 +24,10 @@ GNU General Public License for more details.
 #include <SDL_thread.h>
 #endif
 
+#if XASH_EMSCRIPTEN
+#include "platform/emscripten/net_emscripten.h"
+#endif
+
 #define NET_USE_FRAGMENTS
 
 #define MAX_LOOPBACK		4
