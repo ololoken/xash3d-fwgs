@@ -1938,7 +1938,11 @@ file_t *FS_SysOpen( const char *filepath, const char *mode )
 
 	file = (file_t *)Mem_Calloc( fs_mempool, sizeof( *file ));
 	file->filetime = memfile ? 0 : FS_SysFileTime( filepath );
+#if XASH_EMSCRIPTEN
 	file->mod = mod | opt;
+	if ( !memfile )
+		file->filepath = filepath;
+#endif
 	file->ungetc = EOF;
 	file->handle = fd;
 
@@ -2332,11 +2336,11 @@ int FS_Close( file_t *file )
 			return EOF;
 		}
 #if XASH_EMSCRIPTEN
-		if ( ( file->mod & O_WRONLY ) || ( file->mod & O_RDWR ) ) {
+		if ( file->filepath[0] != '\0' && ( ( file->mod & O_WRONLY ) || ( file->mod & O_RDWR ) ) ) {
 			EM_ASM( { Module.callbacks?.fsSyncRequired?.({
-				path: 'not_implemented', // todo: resolve filename
+				path: UTF8ToString($0),
 				op: 'write'
-			}) } );
+			}) }, file->filepath );
 		}
 #endif //XASH_EMSCRIPTEN
 	}

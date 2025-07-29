@@ -62,7 +62,10 @@ struct file_s
 	fs_offset_t  position;    // current position in the file
 	fs_offset_t  offset;      // offset into the package (0 if external file)
 	uint32_t     flags;
+#ifdef XASH_EMSCRIPTEN
+	const char   *filepath;   // keep copy of path
 	uint32_t     mod;         // mod used to create file handle
+#endif
 	ztoolkit_t   *ztk; // if not NULL, all read functions must go through decompression
 
 	// contents buffer
