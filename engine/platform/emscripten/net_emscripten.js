@@ -34,4 +34,7 @@ addToLibrary({
 
     emscripten_net_select: (n, rfds, wfds, efds, tv) =>
         Module.net?.select?.(n, rfds, wfds, efds, tv) ?? -1,
+
+    emscripten_net_getaddrinfo: (hostnamePtr, restrictPrt, hintsPtr, addrinfoPtr) =>
+        Module.net?.getaddrinfo?.(hostnamePtr, restrictPrt, hintsPtr, addrinfoPtr) ?? -1,
 });

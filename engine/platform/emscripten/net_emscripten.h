@@ -35,6 +35,7 @@ GNU General Public License for more details.
 #define bind emscripten_net_bind
 #define closesocket emscripten_net_closesocket
 #define select emscripten_net_select
+#define getaddrinfo emscripten_net_getaddrinfo
 
 extern int emscripten_net_recvfrom( int, void *__restrict, size_t, int, struct sockaddr *__restrict, int *__restrict );
 extern int emscripten_net_sendto ( int, const void *, size_t, int, const struct sockaddr *, int );
@@ -44,10 +45,10 @@ extern int emscripten_net_gethostname( char *, size_t );
 extern int emscripten_net_getsockname( int, struct sockaddr *__restrict, int *__restrict );
 extern int emscripten_net_send( int, const void *, size_t, int );
 extern int emscripten_net_recv( int, void *, size_t, int );
-
 extern int emscripten_net_connect( int, const struct sockaddr *, int );
 extern int emscripten_net_bind( int, const struct sockaddr *, int );
 extern int emscripten_net_closesocket( int );
 extern int emscripten_net_select( int, fd_set *__restrict, fd_set *__restrict, fd_set *__restrict, struct timeval *__restrict );
+extern int emscripten_net_getaddrinfo (const char *__restrict, const char *__restrict, const struct addrinfo *__restrict, struct addrinfo **__restrict);
 
 #endif // NET_EMSCRIPTEN_H
