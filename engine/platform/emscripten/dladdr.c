@@ -18,12 +18,14 @@ GNU General Public License for more details.
 int emscripten_dladdr(void *address, Dl_info* dl)
 {
     dl->dli_sname = EM_ASM_PTR({
-        const funcPtr = $0;
-        const funcJsRef = Module.getWasmTableEntry(funcPtr).name;
-        for (const hInstance in Module.LDSO.loadedLibsByHandle) {
-            const exports = Object.entries(Module.LDSO.loadedLibsByHandle[hInstance].exports);
-                for (const [fn, { name }] of exports)
-                    if (name === funcJsRef) return stringToNewUTF8(fn);
+        const address = $0;
+        const funcJsRef = getWasmTableEntry(address).name;
+        for (const hInstance in LDSO.loadedLibsByHandle) {
+            const exports = Object.entries(LDSO.loadedLibsByHandle[hInstance].exports);
+            for (const [fn, { name }] of exports) {
+                if (name === funcJsRef)
+                    return stringToUTF8OnStack(name);
+           }
         }
         return 0;
     }, address);
