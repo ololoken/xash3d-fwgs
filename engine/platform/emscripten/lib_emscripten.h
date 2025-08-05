@@ -1,5 +1,5 @@
 /*
-dladdr.h - dladdr workaround for emscripten
+lib_emscripten.h - dladdr workaround for emscripten
 Copyright (C) 2025 ololoken
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -11,14 +11,13 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 */
 
+#if XASH_EMSCRIPTEN
+#ifndef LIB_EMSCRIPTEN_H
+#define LIB_EMSCRIPTEN_H
 
-#ifndef DLADDR_EMSCRIPTEN_H
-#define DLADDR_EMSCRIPTEN_H
+#define Platform_POSIX_GetFuncName( x, y ) EMSCRIPTEN_GetFuncName(( x ), ( y ))
 
-#include <dlfcn.h>
-
-#define dladdr emscripten_dladdr
-
-int emscripten_dladdr(void *address, Dl_info* dl);
+const char *EMSCRIPTEN_GetFuncName(void *, void *);
 
 #endif // DLADDR_EMSCRIPTEN_H
+#endif

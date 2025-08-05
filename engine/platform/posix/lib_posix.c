@@ -20,14 +20,13 @@ GNU General Public License for more details.
 #ifdef XASH_IRIX
 #include "platform/irix/dladdr.h"
 #endif
-#if XASH_EMSCRIPTEN
-#include "platform/emscripten/dladdr.h"
-#endif
+
 #include "common.h"
 #include "library.h"
 #include "filesystem.h"
 #include "server.h"
 #include "platform/android/lib_android.h"
+#include "platform/emscripten/lib_emscripten.h"
 #include "platform/apple/lib_ios.h"
 
 #ifdef XASH_DLL_LOADER // wine-based dll loader
@@ -211,6 +210,13 @@ const char *COM_NameForFunction( void *hInstance, void *function )
 		return Loader_GetFuncName_int(wm, function);
 	else
 #endif
+#ifdef Platform_POSIX_GetFuncName
+	{
+		const char *sname = Platform_POSIX_GetFuncName( hInstance, function );
+		if ( sname )
+			return COM_GetPlatformNeutralName( sname );
+	}
+#else
 	// NOTE: dladdr() is a glibc extension
 	{
 		Dl_info info = {0};
@@ -218,6 +224,7 @@ const char *COM_NameForFunction( void *hInstance, void *function )
 		if( ret && info.dli_sname )
 			return COM_GetPlatformNeutralName( info.dli_sname );
 	}
+#endif
 #ifdef XASH_ALLOW_SAVERESTORE_OFFSETS
 	return COM_OffsetNameForFunction( function );
 #else
