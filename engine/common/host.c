@@ -1361,6 +1361,7 @@ int EXPORT Host_Main( int argc, char **argv, const char *progname, int bChangeGa
 	while( host.status != HOST_CRASHED )
 		Host_MainLoop( &oldtime );
 #else // XASH_EMSCRIPTEN
+	EM_ASM( { Module.callbacks?.gameReady?.() } );
 	emscripten_set_main_loop_arg( Host_MainLoop, &oldtime, 0, false );
 #endif // XASH_EMSCRIPTEN
 
