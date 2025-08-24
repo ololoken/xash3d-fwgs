@@ -20,7 +20,7 @@ const char *EMSCRIPTEN_GetFuncName(void *hInstance, void *address)
         const hInstance = $0;
         const address = $1;
         const funcJsRef = getWasmTableEntry(address).name;
-        const exports = Object.entries(instance.LDSO.loadedLibsByHandle[hInstance]?.exports ?? {});
+        const exports = Object.entries(LDSO.loadedLibsByHandle[hInstance]?.exports ?? {});
         for (const [fn, { name }] of exports)
             if (name === funcJsRef)
                 return stringToUTF8OnStack(fn);
