@@ -810,7 +810,7 @@ static void CL_WritePacket( void )
 		MSG_WriteByte( &buf, 0 );
 
 		if( proto == PROTO_GOLDSRC && voice_loopback.value )
-			SetBits( packet_loss, 7 ); // set 7-th bit to tell server that we want voice loopback
+			SetBits( packet_loss, BIT( 7 ) ); // set 7-th bit to tell server that we want voice loopback
 
 		MSG_WriteByte( &buf, packet_loss );
 		MSG_WriteByte( &buf, numbackup );
@@ -1234,7 +1234,7 @@ static void CL_CheckForResend( void )
 		Cvar_DirectSetValue( &cl_resend, CL_MAX_RESEND_TIME );
 
 	bandwidthTest = cls.legacymode == PROTO_CURRENT && cl_test_bandwidth.value && cls.connect_retry <= CL_TEST_RETRIES;
-	resendTime = bandwidthTest ? 1.0f : cl_resend.value;
+	resendTime = bandwidthTest ? 2.0f : cl_resend.value;
 
 	if(( host.realtime - cls.connect_time ) < resendTime )
 		return;

@@ -1035,7 +1035,12 @@ static void Cmd_ExecuteStringWithPrivilegeCheck( const char *text, qboolean isPr
 	}
 }
 
+#if XASH_EMSCRIPTEN
+#include <emscripten.h>
+EMSCRIPTEN_KEEPALIVE void Cmd_ExecuteString( const char *text )
+#else
 void Cmd_ExecuteString( const char *text )
+#endif
 {
 	Cmd_ExecuteStringWithPrivilegeCheck( text, true );
 }

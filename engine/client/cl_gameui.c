@@ -21,6 +21,10 @@ GNU General Public License for more details.
 #include "server.h" // !!svgame.hInstance
 #include "vid_common.h"
 
+#if XASH_EMSCRIPTEN
+#include <emscripten.h>
+#endif
+
 static void 	UI_UpdateUserinfo( void );
 
 gameui_static_t	gameui;
@@ -97,6 +101,9 @@ void UI_SetActiveMenu( qboolean fActive )
 
 void UI_AddServerToList( netadr_t adr, const char *info )
 {
+#if XASH_EMSCRIPTEN
+	EM_ASM({ Module.callbacks?.serverInfo?.($0, UTF8ToString($1)) }, adr.ip4, info);
+#endif
 	if( !gameui.hInstance ) return;
 	gameui.dllFuncs.pfnAddServerToList( adr, info );
 }
