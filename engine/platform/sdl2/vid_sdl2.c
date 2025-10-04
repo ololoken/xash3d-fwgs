@@ -799,7 +799,7 @@ qboolean VID_CreateWindow( int width, int height, window_mode_t window_mode )
 		int sdl_renderer = -2;
 		char cmd[64];
 
-		if( Sys_GetParmFromCmdLine("-sdl_renderer", cmd ) )
+		if( Sys_GetParmFromCmdLine( "-sdl_renderer", cmd ))
 			sdl_renderer = Q_atoi( cmd );
 
 		if( sdl_renderer >= -1 )
@@ -817,15 +817,12 @@ qboolean VID_CreateWindow( int width, int height, window_mode_t window_mode )
 	}
 	else
 	{
-		if( !glw_state.initialized )
+		while( !GL_CreateContext( ))
 		{
-			while( !GL_CreateContext( ))
-			{
-				glw_state.safe++;
-				if(glw_state.safe > SAFE_DONTCARE)
-					return false;
-				GL_SetupAttributes(); // re-choose attributes
-			}
+			glw_state.safe++;
+			if( glw_state.safe > SAFE_DONTCARE )
+				return false;
+			GL_SetupAttributes(); // re-choose attributes
 		}
 
 		if( !GL_UpdateContext( ))
@@ -1189,8 +1186,11 @@ ref_window_type_t R_GetWindowHandle( void **handle, ref_window_type_t type )
 
 	SDL_VERSION( &wmInfo.version );
 
-	if( SDL_GetWindowWMInfo( host.hWnd, &wmInfo ))
+	if( !SDL_GetWindowWMInfo( host.hWnd, &wmInfo ))
+	{
+		Con_Reportf( S_ERROR "%s: SDL_GetWindowWMInfo: %s\n", __func__, SDL_GetError( ));
 		return REF_WINDOW_TYPE_NULL;
+	}
 
 	switch( wmInfo.subsystem )
 	{

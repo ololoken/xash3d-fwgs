@@ -580,7 +580,7 @@ FS_WriteGameInfo
 assume GameInfo is valid
 ================
 */
-static qboolean FS_WriteGameInfo( const char *filepath, gameinfo_t *GameInfo )
+static qboolean FS_WriteGameInfo( const char *filepath, const gameinfo_t *GameInfo )
 {
 	file_t	*f = FS_Open( filepath, "w", false ); // we in binary-mode
 	int	i, write_ambients = false;
@@ -701,8 +701,8 @@ static qboolean FS_WriteGameInfo( const char *filepath, gameinfo_t *GameInfo )
 		FS_Printf( f, "hd_background\t\t%i\n", GameInfo->hd_background );
 
 	// always expose our extensions :)
-	FS_Printf( f, "internal_vgui_support\t\t%s\n", GameInfo->internal_vgui_support ? "1" : "0" );
-	FS_Printf( f, "render_picbutton_text\t\t%s\n", GameInfo->render_picbutton_text ? "1" : "0" );
+	FS_Printf( f, "internal_vgui_support\t\t%i\n", GameInfo->internal_vgui_support );
+	FS_Printf( f, "render_picbutton_text\t\t%i\n", GameInfo->render_picbutton_text );
 
 	if( COM_CheckStringEmpty( GameInfo->demomap ))
 		FS_Printf( f, "demomap\t\t\"%s\"\n", GameInfo->demomap );
@@ -1368,7 +1368,7 @@ void FS_Rescan( uint32_t flags, const char *language )
 	if( Q_stricmp( GI->basedir, GI->falldir ) && Q_stricmp( GI->gamefolder, GI->falldir ))
 		FS_AddGameHierarchy( GI->falldir, flags );
 
-	GI->added = true;
+	((gameinfo_t *)GI)->added = true; // getting rid of const here, as this modifier only for the engine
 	FS_AddGameHierarchy( GI->gamefolder, FS_GAMEDIR_PATH | flags );
 }
 

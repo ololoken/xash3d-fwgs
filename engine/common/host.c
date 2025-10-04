@@ -37,8 +37,8 @@ GNU General Public License for more details.
 #include "render_api.h"	// decallist_t
 #include "tests.h"
 
-static pfnChangeGame	pChangeGame = NULL;
-host_parm_t		host;	// host parms
+host_parm_t host;	// host parms
+static pfnChangeGame pChangeGame = NULL;
 static jmp_buf return_from_main_buf;
 
 /*
@@ -1027,9 +1027,6 @@ static void Host_InitCommon( int argc, char **argv, const char *progname, qboole
 			Sys_PrintBugcompUsage( exename );
 	}
 
-	if( !Sys_CheckParm( "-noch" ))
-		Sys_SetupCrashHandler( argv[0] );
-
 	host.change_game = bChangeGame || Sys_CheckParm( "-changegame" );
 	host.config_executed = false;
 	host.status = HOST_INIT; // initialzation started
@@ -1101,7 +1098,11 @@ static void Host_InitCommon( int argc, char **argv, const char *progname, qboole
 		Cvar_SetValue( "sys_ticrate", fps );
 	}
 
+	Sys_InitLog();
 	Con_Init(); // early console running to catch all the messages
+
+	if( !Sys_CheckParm( "-noch" ))
+		Sys_SetupCrashHandler( argv[0] );
 
 #if XASH_ENGINE_TESTS
 	if( Sys_CheckParm( "-runtests" ))
@@ -1113,8 +1114,6 @@ static void Host_InitCommon( int argc, char **argv, const char *progname, qboole
 #endif
 	Platform_Init( Host_IsDedicated( ) || developer >= DEV_EXTENDED, basedir );
 	FS_Init( basedir );
-
-	Sys_InitLog();
 
 	// print current developer level to simplify processing users feedback
 	if( developer > 0 )
@@ -1178,6 +1177,7 @@ static void Sys_Quit_f( void )
 	Sys_Quit( "command" );
 }
 
+#if XASH_EMSCRIPTEN
 static void Host_MainLoop( void *userdata )
 {
 	double *poldtime = (double *)userdata;
@@ -1185,6 +1185,7 @@ static void Host_MainLoop( void *userdata )
 	COM_Frame( newtime - *poldtime );
 	*poldtime = newtime;
 }
+#endif
 
 /*
 =================
@@ -1195,6 +1196,11 @@ int EXPORT Host_Main( int argc, char **argv, const char *progname, int bChangeGa
 {
 	static double oldtime;
 	string demoname, exename;
+
+#if !XASH_EMSCRIPTEN
+	if( setjmp( return_from_main_buf ))
+		return error_on_exit;
+#endif
 
 	host.starttime = Sys_DoubleTime();
 
@@ -1338,11 +1344,6 @@ int EXPORT Host_Main( int argc, char **argv, const char *progname, int bChangeGa
 
 	// check after all configs were executed
 	HPAK_CheckIntegrity( hpk_custom_file.string );
-
-#if XASH_ANDROID
-	if( setjmp( return_from_main_buf ))
-		return error_on_exit;
-#endif
 
 #if !XASH_EMSCRIPTEN
 	// main window message loop
