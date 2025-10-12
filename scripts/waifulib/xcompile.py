@@ -705,6 +705,16 @@ def configure(conf):
 		conf.env.LIB_M = ['m']
 		conf.env.VRTLD = ['vrtld']
 		conf.env.DEST_OS = 'psvita'
+	elif conf.options.EMSCRIPTEN:
+		# Emscripten compiler is just wrapper to clang
+		# But we need to setup platform modifiers, they all are contained inside c_emscripten.py for now
+		# In future, that could be upstreamed to waf itself and this wouldn't be needed
+		conf.environ['CC'] = 'emcc'
+		conf.environ['CXX'] = 'em++'
+		conf.environ['AR'] = 'emar'
+		conf.environ['STRIP'] = 'emstrip'
+		conf.environ['OBJCOPY'] = 'llvm-objcopy'
+		conf.load('c_emscripten')
 	elif conf.options.PSP_OPTS:
 		values = conf.options.PSP_OPTS.split(',')
 		if len(values) != 3:
