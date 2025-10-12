@@ -315,7 +315,10 @@ def configure(conf):
 	conf.env.append_unique('CXXFLAGS', cxxflags)
 	conf.env.append_unique('LINKFLAGS', linkflags)
 
-	if conf.env.COMPILER_CC != 'msvc':
+	if conf.env.COMPILER_CC == 'msvc':
+		opt_cflags = ['/we4013'] # -Werror=implicit-function-declaration
+		conf.env.CFLAGS_werror = conf.filter_cflags(opt_cflags, cflags)
+	else:
 		opt_flags = [
 			# '-Wall', '-Wextra', '-Wpedantic',
 			'-fdiagnostics-color=always',
@@ -369,7 +372,8 @@ def configure(conf):
 			]
 
 		opt_cflags = [
-			'-Werror=declaration-after-statement',
+			# disabled, as we're targetting C99 at least
+			# '-Werror=declaration-after-statement',
 			'-Werror=enum-conversion',
 			'-Wno-error=enum-float-conversion', # need this for cvars
 			'-Werror=implicit-int',

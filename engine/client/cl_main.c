@@ -1964,10 +1964,7 @@ static void CL_ParseStatusMessage( netadr_t from, sizebuf_t *msg )
 	CL_FixupColorStringsForInfoString( s, infostring, sizeof( infostring ));
 
 	if( !COM_CheckString( Info_ValueForKey( infostring, "gamedir" )))
-	{
-		Con_Printf( "^1Server^7: %s, Info: %s\n", NET_AdrToString( from ), infostring );
 		return; // unsupported proto
-	}
 
 	Info_RemoveKey( infostring, "gs" ); // don't let servers pretend they're something else
 
@@ -1976,17 +1973,10 @@ static void CL_ParseStatusMessage( netadr_t from, sizebuf_t *msg )
 	{
 		Info_SetValueForKey( infostring, "legacy", "1", sizeof( infostring ));
 		Info_SetValueForKey( infostring, "p", "48", sizeof( infostring ));
-		Con_Printf( "^3Server^7: %s, Game: %s\n", NET_AdrToString( from ), Info_ValueForKey( infostring, "gamedir" ));
 	}
 	else if( !Q_strcmp( p, "48" ))
 	{
 		Info_SetValueForKey( infostring, "legacy", "1", sizeof( infostring ));
-		Con_Printf( "^3Server^7: %s, Game: %s\n", NET_AdrToString( from ), Info_ValueForKey( infostring, "gamedir" ));
-	}
-	else
-	{
-		// more info about servers
-		Con_Printf( "^2Server^7: %s, Game: %s\n", NET_AdrToString( from ), Info_ValueForKey( infostring, "gamedir" ));
 	}
 
 	UI_AddServerToList( from, infostring );
@@ -2027,25 +2017,9 @@ static void CL_ParseGoldSrcStatusMessage( netadr_t from, sizebuf_t *msg )
 		return;
 	}
 
-	// time to figure out protocol
-	if( p == PROTOCOL_VERSION )
-		proto = PROTO_CURRENT;
-	else if( p == PROTOCOL_LEGACY_VERSION )
-	{
-		if( Q_stristr( version, "Stdio" ))
-			proto = PROTO_GOLDSRC;
-		else
-			proto = PROTO_LEGACY;
-	}
-	else
-	{
-		Con_Printf( "%s: unsupported protocol %d from %s\n", __func__, p, NET_AdrToString( from ));
-		return;
-	}
-
 	// now construct infostring for mainui
-	Info_SetValueForKeyf( s, "p", sizeof( s ), "%i", proto == PROTO_CURRENT ? PROTOCOL_VERSION : PROTOCOL_LEGACY_VERSION );
-	Info_SetValueForKey( s, "gs", proto == PROTO_GOLDSRC ? "1" : "0", sizeof( s ));
+	Info_SetValueForKeyf( s, "p", sizeof( s ), "%i", p );
+	Info_SetValueForKey( s, "gs", "1", sizeof( s )); // we only support GoldSrc here, Xash never should reply with this message
 	Info_SetValueForKey( s, "map", map, sizeof( s ));
 	Info_SetValueForKey( s, "dm", "0", sizeof( s )); // obsolete keys
 	Info_SetValueForKey( s, "team", "0", sizeof( s ));
@@ -3641,8 +3615,6 @@ void CL_Init( void )
 	// unreliable buffer. unsed for unreliable commands and voice stream
 	MSG_Init( &cls.datagram, "cls.datagram", cls.datagram_buf, sizeof( cls.datagram_buf ));
 
-	// IN_TouchInit();
-
 	COM_GetCommonLibraryPath( LIBRARY_CLIENT, libpath, sizeof( libpath ));
 
 	if( !CL_LoadProgs( libpath ))
@@ -3674,7 +3646,6 @@ void CL_Shutdown( void )
 		Touch_WriteConfig();
 	}
 
-	// IN_TouchShutdown ();
 	Joy_Shutdown ();
 	CL_CloseDemoHeader ();
 	IN_Shutdown ();
