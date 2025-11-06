@@ -32,11 +32,12 @@ GNU General Public License for more details.
 	#define OS_LIB_EXT    "dylib"
 	#define OPEN_COMMAND  "open"
 #elif XASH_POSIX
-	#define OS_LIB_EXT    "so"
-	#define OPEN_COMMAND  "xdg-open"
 	#if XASH_EMSCRIPTEN
 		#define OS_LIB_EXT "wasm"
+	#else
+	#define OS_LIB_EXT    "so"
 	#endif
+	#define OPEN_COMMAND  "xdg-open"
 #elif XASH_WIN32
 	#define HSPRITE WINAPI_HSPRITE
 	#define WIN32_LEAN_AND_MEAN
