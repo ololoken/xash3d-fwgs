@@ -84,6 +84,7 @@ SUBDIRS = [
 	Subproject('filesystem'),
 	Subproject('stub/server'),
 	Subproject('3rdparty/libbacktrace'),
+	Subproject('3rdparty/library_suffix'),
 
 	# disable only by engine feature, makes no sense to even parse subprojects in dedicated mode
 	Subproject('3rdparty/extras',       lambda x: x.env.CLIENT and x.env.DEST_OS != 'android'),
@@ -305,7 +306,10 @@ def configure(conf):
 		if 'sgug' in os.environ['LD_LIBRARYN32_PATH']:
 			linkflags.append('-lc')
 	elif conf.env.DEST_OS == 'darwin':
-		linkflags.remove('-Wl,--no-undefined')
+		try:
+			linkflags.remove('-Wl,--no-undefined')
+		except:
+			pass
 		linkflags.append('-Wl,-undefined,error')
 	elif conf.env.SAILFISH:
 		conf.define('XASH_SAILFISH', 1)

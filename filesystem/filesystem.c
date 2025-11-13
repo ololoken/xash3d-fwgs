@@ -48,6 +48,7 @@ GNU General Public License for more details.
 #include "xash3d_mathlib.h"
 #include "common/com_strings.h"
 #include "common/protocol.h"
+#include "library_suffix.h"
 
 #if XASH_EMSCRIPTEN
 #include <emscripten.h>
