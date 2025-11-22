@@ -33,9 +33,9 @@ GNU General Public License for more details.
 	#define OPEN_COMMAND  "open"
 #elif XASH_POSIX
 	#if XASH_EMSCRIPTEN
-		#define OS_LIB_EXT "wasm"
+		#define OS_LIB_EXT    "wasm"
 	#else
-	#define OS_LIB_EXT    "so"
+		#define OS_LIB_EXT    "so"
 	#endif
 	#define OPEN_COMMAND  "xdg-open"
 #elif XASH_WIN32

@@ -42,4 +42,4 @@
 	url = https://github.com/numas13/xash3d-maintui.git
 [submodule "3rdparty/library_suffix"]
 	path = 3rdparty/library_suffix
-	url = https://github.com/FWGS/library-suffix.git
+	url = https://github.com/ololoken/library-suffix.git
