@@ -379,102 +379,109 @@ GL_DeleteContext
 always return false
 =================
 */
-qboolean GL_DeleteContext( void )
+static qboolean GL_DeleteContext( void )
 {
 	if( glw_state.context )
 	{
-		SDL_GL_DeleteContext(glw_state.context);
+		SDL_GL_DeleteContext( glw_state.context );
 		glw_state.context = NULL;
 	}
 	return false;
-}
-
-/*
-=================
-GL_CreateContext
-=================
-*/
-static qboolean GL_CreateContext( void )
-{
-	if( ( glw_state.context = SDL_GL_CreateContext( host.hWnd ) ) == NULL)
-	{
-		Con_Reportf( S_ERROR "%s: %s\n", __func__, SDL_GetError( ));
-		return GL_DeleteContext();
-	}
-	return true;
-}
-
-/*
-=================
-GL_UpdateContext
-=================
-*/
-static qboolean GL_UpdateContext( void )
-{
-	if( SDL_GL_MakeCurrent( host.hWnd, glw_state.context ) < 0 )
-	{
-		Con_Reportf( S_ERROR "%s: %s\n", __func__, SDL_GetError( ));
-		return GL_DeleteContext();
-	}
-	return true;
 }
 
 void VID_SaveWindowSize( int width, int height, qboolean maximized )
 {
 	int render_w = width, render_h = height;
 
-	if( !glw_state.software )
-		SDL_GL_GetDrawableSize( host.hWnd, &render_w, &render_h );
+#if SDL_VERSION_ATLEAST( 2, 26, 0 )
+	SDL_GetWindowSizeInPixels( host.hWnd, &render_w, &render_h );
+#else
+	if( glw_state.software )
+		SDL_GetRendererOutputSize( sw.renderer, &render_w, &render_h );
 	else
-		SDL_RenderSetLogicalSize( sw.renderer, width, height );
+		SDL_GL_GetDrawableSize( host.hWnd, &render_w, &render_h );
+#endif
 
 	VID_SetDisplayTransform( &render_w, &render_h );
 	R_SaveVideoMode( width, height, render_w, render_h, maximized );
 }
 
-static qboolean VID_SetScreenResolution( int width, int height, window_mode_t window_mode )
+static qboolean VID_GuessFullscreenMode( int display_index, const SDL_DisplayMode *want, SDL_DisplayMode *got )
 {
-	SDL_DisplayMode got;
-
-	if( window_mode == WINDOW_MODE_BORDERLESS )
+	if( SDL_GetClosestDisplayMode( display_index, want, got ) == NULL )
 	{
-		if( SDL_GetDesktopDisplayMode( 0, &got ) < 0 )
+		Con_Printf( S_ERROR "%s: SDL_GetClosestDisplayMode: %s\n", __func__, SDL_GetError( ));
+
+		// fall back to native mode
+		if( SDL_GetDesktopDisplayMode( display_index, got ) < 0 )
 		{
 			Con_Printf( S_ERROR "%s: SDL_GetDesktopDisplayMode: %s\n", __func__, SDL_GetError( ));
+
 			return false;
 		}
 
+		if( got->w != want->w || got->h != want->h )
+			Con_Reportf( S_NOTE "Got desktop display mode: %ix%i@%i\n", got->w, got->h, got->refresh_rate );
+	}
+	else
+	{
+		if( got->w != want->w || got->h != want->h )
+			Con_Reportf( S_NOTE "Got closest display mode: %ix%i@%i\n", got->w, got->h, got->refresh_rate );
+	}
+
+	return true;
+}
+
+static int VID_GetDisplayIndex( const char *caller, const SDL_Point *pt )
+{
+	int display_index;
+
+	if( pt )
+	{
+#if SDL_VERSION_ATLEAST( 2, 24, 0 )
+		display_index = SDL_GetPointDisplayIndex( pt );
+#else
+		display_index = 0;
+#endif
+	}
+	else
+	{
+		if( !host.hWnd )
+			return 0;
+
+		display_index = SDL_GetWindowDisplayIndex( host.hWnd );
+	}
+
+	if( display_index < 0 )
+	{
+		Con_Printf( S_ERROR "%s: SDL_Get%sDisplayIndex: %s\n", caller, pt ? "Point" : "Display", SDL_GetError());
+		display_index = 0;
+	}
+
+	return display_index;
+}
+
+static qboolean VID_SetScreenResolution( int width, int height, window_mode_t window_mode, window_mode_t prev_window_mode )
+{
+	int out_width, out_height;
+
+	switch( window_mode )
+	{
+	case WINDOW_MODE_BORDERLESS:
 		if( SDL_SetWindowFullscreen( host.hWnd, SDL_WINDOW_FULLSCREEN_DESKTOP ) < 0 )
 		{
 			Con_Printf( S_ERROR "%s: SDL_SetWindowFullscreen (borderless): %s\n", __func__, SDL_GetError( ));
 			return false;
 		}
-	}
-	else if( window_mode == WINDOW_MODE_FULLSCREEN )
+		break;
+	case WINDOW_MODE_FULLSCREEN:
 	{
-		SDL_DisplayMode want = { 0 };
-		want.w = width;
-		want.h = height;
+		const SDL_DisplayMode want = { .w = width, .h = height };
+		SDL_DisplayMode got;
+		int display_index = VID_GetDisplayIndex( __func__, NULL );
 
-		if( SDL_GetClosestDisplayMode( 0, &want, &got ) == NULL )
-		{
-			Con_Printf( S_ERROR "%s: SDL_GetClosestDisplayMode: %s\n", __func__, SDL_GetError( ));
-
-			// fall back to native mode
-			if( SDL_GetDesktopDisplayMode( 0, &got ) < 0 )
-			{
-				Con_Printf( S_ERROR "%s: SDL_GetDesktopDisplayMode: %s\n", __func__, SDL_GetError( ));
-				return false;
-			}
-
-			if( got.w != want.w || got.h != want.h )
-				Con_Reportf( S_NOTE "Got desktop display mode: %ix%i@%i\n", got.w, got.h, got.refresh_rate );
-		}
-		else
-		{
-			if( got.w != want.w || got.h != want.h )
-				Con_Reportf( S_NOTE "Got closest display mode: %ix%i@%i\n", got.w, got.h, got.refresh_rate );
-		}
+		if( !VID_GuessFullscreenMode( display_index, &want, &got ))
+			return false;
 
 		if( SDL_SetWindowDisplayMode( host.hWnd, &got ) < 0 )
 		{
@@ -487,20 +494,47 @@ static qboolean VID_SetScreenResolution( int width, int height, window_mode_t wi
 			Con_Printf( S_ERROR "%s: SDL_SetWindowFullscreen (fullscreen): %s\n", __func__, SDL_GetError( ));
 			return false;
 		}
+		break;
+	}
+	case WINDOW_MODE_WINDOWED:
+	{
+		VID_RestoreScreenResolution( window_mode );
+
+		if( SDL_SetWindowFullscreen( host.hWnd, 0 ) < 0 )
+		{
+			Con_Printf( S_ERROR "%s: SDL_SetWindowFullscreen (windowed): %s\n", __func__, SDL_GetError( ));
+			return false;
+		}
+
+		SDL_SetWindowResizable( host.hWnd, SDL_TRUE );
+		SDL_SetWindowBordered( host.hWnd, SDL_TRUE );
+
+		qboolean maximized = FBitSet( SDL_GetWindowFlags( host.hWnd ), SDL_WINDOW_MAXIMIZED ) != 0;
+		if( !maximized )
+			SDL_SetWindowSize( host.hWnd, width, height );
+
+		break;
+	}
 	}
 
-	SDL_SetWindowSize( host.hWnd, got.w, got.h );
-	VID_SaveWindowSize( got.w, got.h, true );
+	SDL_GetWindowSize( host.hWnd, &out_width, &out_height );
+
+	Con_Reportf( "%s: Setting video mode to %dx%d %s\n", __func__, out_width, out_height,
+		window_mode == WINDOW_MODE_BORDERLESS ? "borderless" :
+		window_mode == WINDOW_MODE_FULLSCREEN ? "fullscreen" : "windowed" );
+
+	VID_SaveWindowSize( out_width, out_height, FBitSet( SDL_GetWindowFlags( host.hWnd ), SDL_WINDOW_MAXIMIZED ) != 0 );
+
 	return true;
 }
 
-void VID_RestoreScreenResolution( void )
+void VID_RestoreScreenResolution( window_mode_t window_mode )
 {
 	// on mobile platform fullscreen is designed to be always on
 	// and code below minimizes our window if we're in full screen
 	// don't do that on mobile devices
 #if !XASH_MOBILE_PLATFORM
-	switch((window_mode_t)vid_fullscreen.value )
+	switch( window_mode )
 	{
 	case WINDOW_MODE_WINDOWED:
 		// TODO: this line is from very old SDL video backend
@@ -573,17 +607,17 @@ static void VID_SetWindowIcon( SDL_Window *hWnd )
 #endif
 }
 
-static qboolean VID_CreateWindowWithSafeGL( const char *wndname, int xpos, int ypos, int w, int h, uint32_t flags )
+static qboolean VID_CreateWindowWithSafeGL( const char *wndname, const SDL_Rect *rect, Uint32 flags )
 {
 	while( glw_state.safe >= SAFE_NO && glw_state.safe < SAFE_LAST )
 	{
-		host.hWnd = SDL_CreateWindow( wndname, xpos, ypos, w, h, flags );
+		host.hWnd = SDL_CreateWindow( wndname, rect->x, rect->y, rect->w, rect->h, flags );
 
 		// we have window, exit loop
 		if( host.hWnd )
 			break;
 
-		Con_Reportf( S_ERROR "%s: couldn't create '%s' with safegl level %d: %s\n", __func__, wndname, glw_state.safe, SDL_GetError());
+		Con_Printf( S_ERROR "%s: couldn't create '%s' with safegl level %d: %s\n", __func__, wndname, glw_state.safe, SDL_GetError());
 
 		glw_state.safe++;
 
@@ -608,16 +642,6 @@ static qboolean RectFitsInDisplay( const SDL_Rect *rect, const SDL_Rect *display
 		&& rect->y >= display->y
 		&& rect->x + rect->w <= display->x + display->w
 		&& rect->y + rect->h <= display->y + display->h;
-}	
-// Function to check if the rectangle fits in any display
-static qboolean RectFitsInAnyDisplay( const SDL_Rect *rect, const SDL_Rect *display_rects, int num_displays )
-{
-	for( int i = 0; i < num_displays; i++ )
-	{
-		if( RectFitsInDisplay( rect, &display_rects[i] ))
-			return true; // Rectangle fits in this display
-	}
-	return false; // Rectangle does not fit in any display
 }
 
 /*
@@ -625,137 +649,145 @@ static qboolean RectFitsInAnyDisplay( const SDL_Rect *rect, const SDL_Rect *disp
 VID_CreateWindow
 =================
 */
-qboolean VID_CreateWindow( int width, int height, window_mode_t window_mode )
+qboolean VID_CreateWindow( int input_width, int input_height, window_mode_t window_mode )
 {
-	string wndname;
-	qboolean maximized = vid_maximized.value != 0.0f;
-	Uint32 wndFlags = SDL_WINDOW_SHOWN | SDL_WINDOW_MOUSE_FOCUS | SDL_WINDOW_ALLOW_HIGHDPI;
-	int xpos, ypos;
-	int num_displays = SDL_GetNumVideoDisplays();
-	SDL_Rect rect = { window_xpos.value, window_ypos.value, width, height };
-
-	Q_strncpy( wndname, GI->title, sizeof( wndname ));
+	Uint32 flags = SDL_WINDOW_SHOWN | SDL_WINDOW_MOUSE_FOCUS | SDL_WINDOW_ALLOW_HIGHDPI;
+	SDL_Rect rect = { window_xpos.value, window_ypos.value, input_width, input_height };
+	const qboolean position_undefined = rect.x < 0 || rect.y < 0;
 
 	if( !glw_state.software )
-		SetBits( wndFlags, SDL_WINDOW_OPENGL );
+		SetBits( flags, SDL_WINDOW_OPENGL );
+
+	if( position_undefined )
+		rect.x = rect.y = SDL_WINDOWPOS_UNDEFINED;
+
+	switch( window_mode )
+	{
+	// in windowed mode, we only want to ensure that
+	// window fits on any display, and if not, reset position
+	case WINDOW_MODE_WINDOWED:
+		SetBits( flags, SDL_WINDOW_RESIZABLE );
+
+		if( vid_maximized.value != 0.0f )
+			SetBits( flags, SDL_WINDOW_MAXIMIZED );
+
+		if( !position_undefined )
+		{
+			const int num_displays = SDL_GetNumVideoDisplays();
+			qboolean window_fits = false;
+
+			for( int i = 0; i < num_displays; i++ )
+			{
+				SDL_Rect display_bounds;
+
+				if( SDL_GetDisplayBounds( i, &display_bounds ) == 0 )
+				{
+					Con_Reportf( "Display %d: %d %d %d %d\n", i, display_bounds.x, display_bounds.y, display_bounds.w, display_bounds.h );
+				}
+				else
+				{
+					Con_Printf( S_ERROR "Failed to get bounds for display %d! SDL_Error: %s\n", i, SDL_GetError());
+					continue;
+				}
+
+				if( RectFitsInDisplay( &rect, &display_bounds ))
+				{
+					window_fits = true;
+					break;
+				}
+			}
+
+			// Check if the rectangle fits in any display
+			if( !window_fits )
+			{
+				Con_Printf( S_ERROR "Window { %d, %d, %d, %d } does not fit on any display\n", rect.x, rect.y, rect.w, rect.h );
+				rect.x = rect.y = SDL_WINDOWPOS_UNDEFINED;
+			}
+		}
+		break;
+	// in fullscreen modes, we keep positions
+	// (as they might indicate chosen display in multimonitor configs)
+	case WINDOW_MODE_BORDERLESS:
+		SetBits( flags, SDL_WINDOW_FULLSCREEN_DESKTOP | SDL_WINDOW_BORDERLESS );
+		break;
+	// in true fullscreen mode, we need to guess better video mode
+	case WINDOW_MODE_FULLSCREEN:
+	{
+		const SDL_DisplayMode want = { .w = rect.w, .h = rect.h };
+		SDL_DisplayMode got;
+		int display_index = 0;
+
+		SetBits( flags, SDL_WINDOW_FULLSCREEN | SDL_WINDOW_BORDERLESS );
+
+		if( !position_undefined )
+		{
+			const SDL_Point pt = { .x = rect.x, .y = rect.y };
+
+			display_index = VID_GetDisplayIndex( __func__, &pt );
+		}
+
+		if( VID_GuessFullscreenMode( display_index, &want, &got ))
+		{
+			rect.w = got.w;
+			rect.h = got.h;
+		}
+
+		break;
+	}
+	}
 
 #if XASH_EMSCRIPTEN // chromium based browsers have a bug with dynamic alpha channel attribute update.
 	SDL_GL_SetAttribute( SDL_GL_ALPHA_SIZE, 0 );
 #endif
 
-	if( window_mode == WINDOW_MODE_WINDOWED )
-	{
-		SDL_Rect *display_rects = ( SDL_Rect * )malloc( num_displays * sizeof( SDL_Rect ));
-
-		SetBits( wndFlags, SDL_WINDOW_RESIZABLE );
-		if( maximized )
-			SetBits( wndFlags, SDL_WINDOW_MAXIMIZED );
-
-		if( !display_rects )
-		{
-			Con_Printf( S_ERROR "Failed to allocate memory for display rects!\n" );
-			xpos = SDL_WINDOWPOS_UNDEFINED;
-			ypos = SDL_WINDOWPOS_UNDEFINED;
-		}
-		else
-		{
-			for( int i = 0; i < num_displays; i++ )
-			{
-				if( SDL_GetDisplayBounds( i, &display_rects[i] ) != 0 )
-				{
-					Con_Printf( S_ERROR "Failed to get bounds for display %d! SDL_Error: %s\n", i, SDL_GetError());
-					display_rects[i] = ( SDL_Rect ){ 0, 0, 0, 0 };
-				}
-			}
-			// Check if the rectangle fits in any display
-			if( !RectFitsInAnyDisplay( &rect, display_rects, num_displays ))
-			{
-				// Rectangle doesn't fit in any display, center it
-				xpos = SDL_WINDOWPOS_CENTERED;
-				ypos = SDL_WINDOWPOS_CENTERED;
-				Con_Printf( S_ERROR "Rectangle does not fit in any display. Centering window.\n" );
-			}
-			else
-			{
-				xpos = rect.x;
-				ypos = rect.y;
-			}
-		}
-		free( display_rects );
-	}
-	else
-	{
-		if( window_mode == WINDOW_MODE_FULLSCREEN )
-			// need input grab only in true fullscreen mode
-			SetBits( wndFlags, SDL_WINDOW_FULLSCREEN | SDL_WINDOW_INPUT_GRABBED );
-		else
-			SetBits( wndFlags, SDL_WINDOW_FULLSCREEN_DESKTOP );
-		SetBits( wndFlags, SDL_WINDOW_BORDERLESS );
-		if ( window_xpos.value < 0 || window_ypos.value < 0 )
-		{
-			xpos = SDL_WINDOWPOS_UNDEFINED;
-			ypos = SDL_WINDOWPOS_UNDEFINED;
-		}
-		else
-		{
-			xpos = window_xpos.value;
-			ypos = window_ypos.value;
-		}
-	}
-
-	if( !VID_CreateWindowWithSafeGL( wndname, xpos, ypos, width, height, wndFlags ))
+	if( !VID_CreateWindowWithSafeGL( GI->title, &rect, flags ))
 		return false;
-
-	// update window size if it was maximized, just in case
-	if( FBitSet( SDL_GetWindowFlags( host.hWnd ), SDL_WINDOW_MAXIMIZED|SDL_WINDOW_FULLSCREEN_DESKTOP ) != 0 )
-		SDL_GetWindowSize( host.hWnd, &width, &height );
-
-	if( window_mode != WINDOW_MODE_WINDOWED )
-	{
-		if( !VID_SetScreenResolution( width, height, window_mode ))
-			return false;
-	}
-	else VID_RestoreScreenResolution();
 
 	VID_SetWindowIcon( host.hWnd );
 	SDL_ShowWindow( host.hWnd );
 
 	if( glw_state.software )
 	{
-		int sdl_renderer = -2;
 		char cmd[64];
 
 		if( Sys_GetParmFromCmdLine( "-sdl_renderer", cmd ))
-			sdl_renderer = Q_atoi( cmd );
-
-		if( sdl_renderer >= -1 )
 		{
+			int sdl_renderer = Q_max( -1, Q_atoi( cmd ));
+
 			sw.renderer = SDL_CreateRenderer( host.hWnd, sdl_renderer, 0 );
+
 			if( !sw.renderer )
-				Con_Printf( S_ERROR "failed to create SDL renderer: %s\n", SDL_GetError() );
-			else
 			{
-				SDL_RendererInfo info;
-				SDL_GetRendererInfo( sw.renderer, &info );
-				Con_Printf( "SDL_Renderer %s initialized\n", info.name );
+				Con_Printf( S_ERROR "%s: SDL_CreateRenderer: %s\n", __func__, SDL_GetError( ));
+				return false;
 			}
+
+			SDL_RendererInfo info;
+			SDL_GetRendererInfo( sw.renderer, &info );
+			Con_Printf( "SDL_Renderer %s initialized\n", info.name );
 		}
 	}
 	else
 	{
-		while( !GL_CreateContext( ))
+		glw_state.context = SDL_GL_CreateContext( host.hWnd );
+
+		if( !glw_state.context )
 		{
-			glw_state.safe++;
-			if( glw_state.safe > SAFE_DONTCARE )
-				return false;
-			GL_SetupAttributes(); // re-choose attributes
+			Con_Printf( S_ERROR "%s: SDL_GL_CreateContext: %s\n", __func__, SDL_GetError());
+			return false;
 		}
 
-		if( !GL_UpdateContext( ))
+		if( SDL_GL_MakeCurrent( host.hWnd, glw_state.context ) < 0 )
+		{
+			Con_Printf( S_ERROR "%s: SDL_GL_MakeCurrent: %s\n", __func__, SDL_GetError( ));
+			GL_DeleteContext();
 			return false;
+		}
 	}
 
-	VID_SaveWindowSize( width, height, maximized );
+	// update window size if it was resized
+	SDL_GetWindowSize( host.hWnd, &rect.w, &rect.h );
+	VID_SaveWindowSize( rect.w, rect.h, FBitSet( SDL_GetWindowFlags( host.hWnd ), SDL_WINDOW_MAXIMIZED ));
 
 	return true;
 }
@@ -769,17 +801,13 @@ void VID_DestroyWindow( void )
 {
 	GL_DeleteContext();
 
-	VID_RestoreScreenResolution();
-	if( host.hWnd )
-	{
-		SDL_DestroyWindow ( host.hWnd );
-		host.hWnd = NULL;
-	}
+	VID_RestoreScreenResolution( (window_mode_t)vid_fullscreen.value );
 
-	if( refState.fullScreen )
-	{
-		refState.fullScreen = false;
-	}
+	if( host.hWnd )
+		SDL_DestroyWindow( host.hWnd );
+
+	host.hWnd = NULL;
+	refState.window_mode = WINDOW_MODE_WINDOWED;
 }
 
 /*
@@ -893,25 +921,13 @@ qboolean R_Init_Video( const int type )
 	string safe;
 	qboolean retval;
 	SDL_DisplayMode displayMode;
-#if SDL_VERSION_ATLEAST( 2, 24, 0 )
-	SDL_Point point = { window_xpos.value, window_ypos.value };
-	int displayIndex = SDL_GetPointDisplayIndex( &point );
-#else
-	int displayIndex = 0;
-#endif
+	const SDL_Point point = { window_xpos.value, window_ypos.value };
 
-	SDL_GetCurrentDisplayMode( displayIndex, &displayMode );
-
+	SDL_GetCurrentDisplayMode( VID_GetDisplayIndex( __func__, &point ), &displayMode );
 	refState.desktopBitsPixel = SDL_BITSPERPIXEL( displayMode.format );
 
-#ifdef SDL_HINT_QTWAYLAND_WINDOW_FLAGS
-	SDL_SetHint( SDL_HINT_QTWAYLAND_WINDOW_FLAGS, "OverridesSystemGestures" );
-#endif
-#ifdef SDL_HINT_QTWAYLAND_CONTENT_ORIENTATION
-	SDL_SetHint( SDL_HINT_QTWAYLAND_CONTENT_ORIENTATION, "landscape" );
-#endif
 
-	if( Sys_CheckParm( "-egl" ) )
+	if( Sys_CheckParm( "-egl" ))
 	{
 		// EGL doesn't mean we want GLES context
 		// so force it only on Windows, where GL is usually created via WGL
@@ -922,6 +938,8 @@ qboolean R_Init_Video( const int type )
 		SDL_SetHint( SDL_HINT_VIDEO_X11_FORCE_EGL, "1" );
 	}
 
+	SDL_SetHint( SDL_HINT_QTWAYLAND_WINDOW_FLAGS, "OverridesSystemGestures" );
+	SDL_SetHint( SDL_HINT_QTWAYLAND_CONTENT_ORIENTATION, "landscape" );
 	SDL_SetHint( SDL_HINT_VIDEO_X11_XRANDR, "1" );
 	SDL_SetHint( SDL_HINT_VIDEO_X11_XVIDMODE, "1" );
 
@@ -973,53 +991,22 @@ qboolean R_Init_Video( const int type )
 
 rserr_t R_ChangeDisplaySettings( int width, int height, window_mode_t window_mode )
 {
-	SDL_DisplayMode displayMode;
-
-	if( SDL_GetCurrentDisplayMode( 0, &displayMode ) < 0 )
-	{
-		Con_Printf( S_ERROR "SDL_GetCurrentDisplayMode: %s\n", SDL_GetError( ));
-		return rserr_invalid_mode;
-	}
-
-	// check our desktop attributes
-	refState.desktopBitsPixel = SDL_BITSPERPIXEL( displayMode.format );
-	if( window_mode == WINDOW_MODE_BORDERLESS )
-	{
-		width = displayMode.w;
-		height = displayMode.h;
-	}
-
-	refState.fullScreen = window_mode != WINDOW_MODE_WINDOWED;
-	Con_Reportf( "%s: Setting video mode to %dx%d %s\n", __func__, width, height, refState.fullScreen ? "fullscreen" : "windowed" );
+	SDL_DisplayMode display_mode;
 
 	if( !host.hWnd )
 	{
 		if( !VID_CreateWindow( width, height, window_mode ))
 			return rserr_invalid_mode;
 	}
-	else if( refState.fullScreen )
-	{
-		if( !VID_SetScreenResolution( width, height, window_mode ))
-			return rserr_invalid_fullscreen;
-	}
 	else
 	{
-		VID_RestoreScreenResolution();
-
-		if( SDL_SetWindowFullscreen( host.hWnd, 0 ) < 0 )
-		{
-			Con_Printf( S_ERROR "SDL_SetWindowFullscreen: %s\n", SDL_GetError( ));
+		if( !VID_SetScreenResolution( width, height, window_mode, refState.window_mode ))
 			return rserr_invalid_fullscreen;
-		}
-#if SDL_VERSION_ATLEAST( 2, 0, 5 )
-		SDL_SetWindowResizable( host.hWnd, SDL_TRUE );
-#endif
-		SDL_SetWindowBordered( host.hWnd, SDL_TRUE );
-		SDL_SetWindowSize( host.hWnd, width, height );
-
-		VID_SaveWindowSize( width, height, FBitSet( SDL_GetWindowFlags( host.hWnd ), SDL_WINDOW_MAXIMIZED ) != 0 );
 	}
 
+	SDL_GetWindowDisplayMode( host.hWnd, &display_mode );
+	refState.desktopBitsPixel = SDL_BITSPERPIXEL( display_mode.format );
+	refState.window_mode = window_mode;
 	return rserr_ok;
 }
 
