@@ -107,8 +107,10 @@ void SDLash_Init( const char *basedir )
 		SDL_LogSetAllPriority( SDL_LOG_PRIORITY_ERROR );
 
 #if XASH_WIN32
-	SDL_SetHint( SDL_HINT_WINDOWS_DPI_AWARENESS, "permonitorv2" );
-	SDL_SetHint( SDL_HINT_WINDOWS_DPI_SCALING, "1" );
+	SDL_SetHint( SDL_HINT_WINDOWS_DPI_AWARENESS, "permonitor" );
+	// TODO: disabled for now
+	// try to test it better when we'll come back to highdpi support issue
+	// SDL_SetHint( SDL_HINT_WINDOWS_DPI_SCALING, "1" );
 #endif // XASH_WIN32
 
 	if( SDL_Init( SDL_INIT_TIMER | SDL_INIT_VIDEO | SDL_INIT_EVENTS ) )

@@ -389,8 +389,9 @@ static qboolean GL_DeleteContext( void )
 	return false;
 }
 
-void VID_SaveWindowSize( int width, int height, qboolean maximized )
+void VID_SaveWindowSize( int width, int height )
 {
+	qboolean maximized = FBitSet( SDL_GetWindowFlags( host.hWnd ), SDL_WINDOW_MAXIMIZED );
 	int render_w = width, render_h = height;
 
 #if SDL_VERSION_ATLEAST( 2, 26, 0 )
@@ -461,6 +462,46 @@ static int VID_GetDisplayIndex( const char *caller, const SDL_Point *pt )
 	return display_index;
 }
 
+static qboolean VID_GetDisplayBounds( int display_index, SDL_Window *hWnd, SDL_Rect *rect )
+{
+	if( SDL_GetDisplayUsableBounds( display_index, rect ) == 0 )
+	{
+		wrect_t wrc = { 0 };
+
+		if( hWnd )
+		{
+			SDL_GetWindowBordersSize( hWnd, &wrc.top, &wrc.left, &wrc.bottom, &wrc.right );
+		}
+		else
+		{
+#if XASH_WIN32
+			wrc.left = GetSystemMetrics( SM_CYSIZEFRAME );
+			wrc.right = wrc.bottom = wrc.left;
+			wrc.top = GetSystemMetrics( SM_CYSMCAPTION ) + wrc.left;
+#endif // XASH_WIN32
+		}
+
+		rect->x += wrc.left + wrc.right;
+		rect->y += wrc.top + wrc.bottom;
+		rect->w -= ( wrc.left + wrc.right ) * 2;
+		rect->h -= ( wrc.top + wrc.bottom ) * 2;
+
+		return true;
+	}
+	else if( SDL_GetDisplayBounds( display_index, rect ) == 0 )
+	{
+		rect->x += 100;
+		rect->y += 100;
+		rect->w -= 100;
+		rect->h -= 100;
+
+		return true;
+	}
+
+	memset( rect, 0, sizeof( *rect ));
+	return false;
+}
+
 static qboolean VID_SetScreenResolution( int width, int height, window_mode_t window_mode, window_mode_t prev_window_mode )
 {
 	int out_width, out_height;
@@ -489,16 +530,23 @@ static qboolean VID_SetScreenResolution( int width, int height, window_mode_t wi
 			return false;
 		}
 
-		if( SDL_SetWindowFullscreen( host.hWnd, SDL_WINDOW_FULLSCREEN ) < 0 )
+		if( prev_window_mode != WINDOW_MODE_FULLSCREEN )
 		{
-			Con_Printf( S_ERROR "%s: SDL_SetWindowFullscreen (fullscreen): %s\n", __func__, SDL_GetError( ));
-			return false;
+			if( SDL_SetWindowFullscreen( host.hWnd, SDL_WINDOW_FULLSCREEN ) < 0 )
+			{
+				Con_Printf( S_ERROR "%s: SDL_SetWindowFullscreen (fullscreen): %s\n", __func__, SDL_GetError( ));
+				return false;
+			}
 		}
+
+		// SDL_SetWindowDisplayMode is broken in SDL2, it changes the display mode but doesn't change window size
+		SDL_SetWindowSize( host.hWnd, got.w, got.h );
+
 		break;
 	}
 	case WINDOW_MODE_WINDOWED:
 	{
-		VID_RestoreScreenResolution( window_mode );
+		qboolean overriden = false;
 
 		if( SDL_SetWindowFullscreen( host.hWnd, 0 ) < 0 )
 		{
@@ -509,8 +557,32 @@ static qboolean VID_SetScreenResolution( int width, int height, window_mode_t wi
 		SDL_SetWindowResizable( host.hWnd, SDL_TRUE );
 		SDL_SetWindowBordered( host.hWnd, SDL_TRUE );
 
-		qboolean maximized = FBitSet( SDL_GetWindowFlags( host.hWnd ), SDL_WINDOW_MAXIMIZED ) != 0;
-		if( !maximized )
+		if( FBitSet( SDL_GetWindowFlags( host.hWnd ), SDL_WINDOW_MAXIMIZED ))
+		{
+			// no-op
+			overriden = true;
+		}
+		else if( prev_window_mode != WINDOW_MODE_WINDOWED )
+		{
+			int display_index = VID_GetDisplayIndex( __func__, NULL );
+			SDL_Rect bounds;
+			int xpos, ypos;
+
+			if( VID_GetDisplayBounds( display_index, host.hWnd, &bounds ))
+			{
+				if( width > bounds.w || height > bounds.h )
+				{
+					SDL_SetWindowPosition( host.hWnd, bounds.x, bounds.y );
+					SDL_SetWindowSize( host.hWnd, bounds.w, bounds.h );
+					overriden = true;
+				}
+			}
+
+			if( !overriden )
+				SDL_SetWindowPosition( host.hWnd, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED );
+		}
+
+		if( !overriden )
 			SDL_SetWindowSize( host.hWnd, width, height );
 
 		break;
@@ -523,7 +595,7 @@ static qboolean VID_SetScreenResolution( int width, int height, window_mode_t wi
 		window_mode == WINDOW_MODE_BORDERLESS ? "borderless" :
 		window_mode == WINDOW_MODE_FULLSCREEN ? "fullscreen" : "windowed" );
 
-	VID_SaveWindowSize( out_width, out_height, FBitSet( SDL_GetWindowFlags( host.hWnd ), SDL_WINDOW_MAXIMIZED ) != 0 );
+	VID_SaveWindowSize( out_width, out_height );
 
 	return true;
 }
@@ -557,9 +629,31 @@ void VID_RestoreScreenResolution( window_mode_t window_mode )
 
 static void VID_SetWindowIcon( SDL_Window *hWnd )
 {
-	rgbdata_t *icon = NULL;
 	char iconpath[MAX_STRING];
-#if XASH_WIN32 // ICO support only for Win32
+
+	Q_strncpy( iconpath, GI->iconpath, sizeof( iconpath ));
+	COM_ReplaceExtension( iconpath, ".tga", sizeof( iconpath ));
+
+	rgbdata_t *icon = FS_LoadImage( iconpath, NULL, 0 );
+
+	if( icon )
+	{
+		SDL_Surface *surface = SDL_CreateRGBSurfaceFrom( icon->buffer,
+			icon->width, icon->height, 32, 4 * icon->width,
+			0x000000ff, 0x0000ff00, 0x00ff0000, 0xff000000 );
+
+		FS_FreeImage( icon );
+
+		if( surface )
+		{
+			SDL_SetWindowIcon( host.hWnd, surface );
+			SDL_FreeSurface( surface );
+			return;
+		}
+	}
+
+	// ICO support only for Win32
+#if XASH_WIN32
 	const char *disk_iconpath = FS_GetDiskPath( GI->iconpath, true );
 
 	if( disk_iconpath )
@@ -580,29 +674,7 @@ static void VID_SetWindowIcon( SDL_Window *hWnd )
 				return;
 		}
 	}
-#endif // XASH_WIN32
 
-	Q_strncpy( iconpath, GI->iconpath, sizeof( iconpath ));
-	COM_ReplaceExtension( iconpath, ".tga", sizeof( iconpath ));
-	icon = FS_LoadImage( iconpath, NULL, 0 );
-
-	if( icon )
-	{
-		SDL_Surface *surface = SDL_CreateRGBSurfaceFrom( icon->buffer,
-			icon->width, icon->height, 32, 4 * icon->width,
-			0x000000ff, 0x0000ff00, 0x00ff0000, 0xff000000 );
-
-		FS_FreeImage( icon );
-
-		if( surface )
-		{
-			SDL_SetWindowIcon( host.hWnd, surface );
-			SDL_FreeSurface( surface );
-			return;
-		}
-	}
-
-#if XASH_WIN32 // ICO support only for Win32
 	WIN_SetWindowIcon( LoadIcon( GetModuleHandle( NULL ), MAKEINTRESOURCE( 101 )));
 #endif
 }
@@ -651,9 +723,14 @@ VID_CreateWindow
 */
 qboolean VID_CreateWindow( int input_width, int input_height, window_mode_t window_mode )
 {
-	Uint32 flags = SDL_WINDOW_SHOWN | SDL_WINDOW_MOUSE_FOCUS | SDL_WINDOW_ALLOW_HIGHDPI;
+	Uint32 flags = SDL_WINDOW_SHOWN | SDL_WINDOW_MOUSE_FOCUS;
 	SDL_Rect rect = { window_xpos.value, window_ypos.value, input_width, input_height };
 	const qboolean position_undefined = rect.x < 0 || rect.y < 0;
+
+	// TODO: disabled for Windows for now
+#if !XASH_WIN32
+	SetBits( flags, SDL_WINDOW_ALLOW_HIGHDPI );
+#endif // !XASH_WIN32
 
 	if( !glw_state.software )
 		SetBits( flags, SDL_WINDOW_OPENGL );
@@ -669,9 +746,14 @@ qboolean VID_CreateWindow( int input_width, int input_height, window_mode_t wind
 		SetBits( flags, SDL_WINDOW_RESIZABLE );
 
 		if( vid_maximized.value != 0.0f )
+		{
 			SetBits( flags, SDL_WINDOW_MAXIMIZED );
-
-		if( !position_undefined )
+		}
+		else if( position_undefined )
+		{
+			VID_GetDisplayBounds( 0, NULL, &rect );
+		}
+		else
 		{
 			const int num_displays = SDL_GetNumVideoDisplays();
 			qboolean window_fits = false;
@@ -680,7 +762,7 @@ qboolean VID_CreateWindow( int input_width, int input_height, window_mode_t wind
 			{
 				SDL_Rect display_bounds;
 
-				if( SDL_GetDisplayBounds( i, &display_bounds ) == 0 )
+				if( VID_GetDisplayBounds( i, NULL, &display_bounds ))
 				{
 					Con_Reportf( "Display %d: %d %d %d %d\n", i, display_bounds.x, display_bounds.y, display_bounds.w, display_bounds.h );
 				}
@@ -701,7 +783,7 @@ qboolean VID_CreateWindow( int input_width, int input_height, window_mode_t wind
 			if( !window_fits )
 			{
 				Con_Printf( S_ERROR "Window { %d, %d, %d, %d } does not fit on any display\n", rect.x, rect.y, rect.w, rect.h );
-				rect.x = rect.y = SDL_WINDOWPOS_UNDEFINED;
+				VID_GetDisplayBounds( 0, NULL, &rect );
 			}
 		}
 		break;
@@ -787,7 +869,11 @@ qboolean VID_CreateWindow( int input_width, int input_height, window_mode_t wind
 
 	// update window size if it was resized
 	SDL_GetWindowSize( host.hWnd, &rect.w, &rect.h );
-	VID_SaveWindowSize( rect.w, rect.h, FBitSet( SDL_GetWindowFlags( host.hWnd ), SDL_WINDOW_MAXIMIZED ));
+	VID_SaveWindowSize( rect.w, rect.h );
+
+	SDL_GetWindowPosition( host.hWnd, &rect.x, &rect.y );
+	Cvar_DirectSetValue( &window_xpos, rect.x );
+	Cvar_DirectSetValue( &window_ypos, rect.y );
 
 	return true;
 }
