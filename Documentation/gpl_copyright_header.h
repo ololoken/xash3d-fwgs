@@ -1,7 +1,6 @@
 /*
-platform_sdl3.h - SDL3 platform definitions
-Copyright (C) 2025 Er2off
-Copyright (C) 2025 Alibek Omarov
+filename.ext - do not include this file, only copy the header
+Copyright (C) 2015-2025 Xash3D FWGS contributors
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -13,19 +12,4 @@ but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 */
-#ifndef PLATFORM_SDL3_H
-#define PLATFORM_SDL3_H
 
-#include <SDL3/SDL.h>
-#include "platform/platform.h"
-
-#define Con_PrintSDLError( func ) \
-	Con_Printf( S_ERROR "%s: %s: %s\n", __func__, func, SDL_GetError( ));
-
-//
-// in_sdl3.c
-//
-void SDLash_InitCursors( void );
-void SDLash_FreeCursors( void );
-
-#endif // PLATFORM_SDL3_H
