@@ -308,7 +308,7 @@ def build(bld):
 		linkflags = []
 
 		if bld.env.DEST_OS == 'emscripten':
-			linkflags = [ '-sENVIRONMENT=web', '-sAUTO_JS_LIBRARIES=0', '-logg',
+			linkflags = [ '-sENVIRONMENT=web', '-sAUTO_JS_LIBRARIES=0',
 						  '-lidbfs.js', '-lwebgl.js', '-lopenal.js', '-lasync.js', '-sNO_POLYFILL',
 						  '--js-library=../engine/platform/emscripten/net_emscripten.js',
 						  '-sINITIAL_MEMORY=512mb', '-sSTACK_SIZE=32mb', '-sALLOW_MEMORY_GROWTH=1',
