@@ -860,9 +860,24 @@ static qboolean VID_CreateWindow( const int input_width, const int input_height,
 	SDL_GetWindowSize( host.hWnd, &rect.w, &rect.h );
 	VID_SaveWindowSize( rect.w, rect.h );
 
-	SDL_GetWindowPosition( host.hWnd, &rect.x, &rect.y );
-	Cvar_DirectSetValue( &window_xpos, rect.x );
-	Cvar_DirectSetValue( &window_ypos, rect.y );
+	// save position if it was undefined (first launch)
+	if( position_undefined )
+	{
+		int top, left;
+
+		SDL_GetWindowPosition( host.hWnd, &rect.x, &rect.y );
+
+		// adjust for window decorations - SDL reports client area position,
+		// but SDL_CreateWindow positions the frame
+		if( SDL_GetWindowBordersSize( host.hWnd, &top, &left, NULL, NULL ) == 0 )
+		{
+			rect.x -= left;
+			rect.y -= top;
+		}
+
+		Cvar_DirectSetValue( &window_xpos, rect.x );
+		Cvar_DirectSetValue( &window_ypos, rect.y );
+	}
 
 	return true;
 }
@@ -991,7 +1006,7 @@ int GL_GetAttribute( int attr, int *val )
 R_Init_Video
 ==================
 */
-qboolean R_Init_Video( const int type )
+qboolean R_Init_Video( ref_graphic_apis_t type )
 {
 	string safe;
 	SDL_DisplayMode displayMode;
@@ -1134,7 +1149,7 @@ qboolean VID_SetMode( void )
 	{
 		if( err == rserr_invalid_fullscreen )
 		{
-			Cvar_DirectSet( &vid_fullscreen, "0" );
+			Cvar_DirectSetValue( &vid_fullscreen, WINDOW_MODE_WINDOWED );
 			Con_Reportf( S_ERROR "%s: fullscreen unavailable in this mode\n", __func__ );
 			Sys_Warn( "fullscreen unavailable in this mode!" );
 			if(( err = R_ChangeDisplaySettings( iScreenWidth, iScreenHeight, WINDOW_MODE_WINDOWED )) == rserr_ok )
