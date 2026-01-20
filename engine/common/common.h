@@ -308,7 +308,7 @@ typedef struct host_parm_s
 	void   *hWnd;          // main window
 
 	// command line parms
-	char **argv;
+	const char **argv;
 	int	 argc;
 
 	uint     framecount;     // global framecount
@@ -696,7 +696,6 @@ int COM_SizeofResourceList( resource_t *pList, resourceinfo_t *ri );
 // cfgscript.c
 //
 int CSCR_LoadDefaultCVars( const char *scriptfilename );
-int CSCR_WriteGameCVars( file_t *cfg, const char *scriptfilename );
 
 //
 // hpak.c
