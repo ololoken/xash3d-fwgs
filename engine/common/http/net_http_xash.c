@@ -21,6 +21,9 @@ GNU General Public License for more details.
 #include "ipv6text.h"
 #include "net_ws_private.h"
 #include "miniz.h"
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
 
 /*
 =================================================
@@ -100,6 +103,8 @@ static int HTTP_FileQueue( httpfile_t *file );
 static int HTTP_FileResolveNS( httpfile_t *file );
 static int HTTP_FileSendRequest( httpfile_t *file );
 static int HTTP_FileDecompress( httpfile_t *file );
+
+static int HTTP_FileSaveReceivedData( httpfile_t *file, int pos, int length );
 
 /*
 ==============
@@ -203,8 +208,40 @@ static int HTTP_FileQueue( httpfile_t *file )
 		HTTP_FreeFile( file, true );
 		return 0;
 	}
-
+#ifdef __EMSCRIPTEN__
+	char url[4096];
+	memset( &file->addr, 0, sizeof( file->addr ));
+	Q_snprintf( url, sizeof( url ), "%s://%s:%d%s%s", file->server->port == 443 ? "https" : "http", file->server->host, file->server->port, file->server->path, file->path);
+	memset( file->buf, 0, sizeof( file->buf ));
+	http.active_count++;
+	file->chunked = false;
+	EM_ASM({
+		const url = UTF8ToString($0);
+		const currfilePtr = $1;
+		const buffPtrOffset = $2;
+		const reportedSizePtrOffset = $3;
+		const fileSaveReceivedDataPtr = $4;
+		const freeFilePtr = $5;
+		fetch(url)
+			.then(async ({ body, headers }) => {
+				const reader = body.getReader();
+				HEAP32[(currfilePtr + reportedSizePtrOffset)>>2] = Number(headers.get('Content-Length'));
+				while(true) {
+					const { done, value } = await reader.read();
+					if (done) break;
+					HEAPU8.set(new Uint8Array(value), currfilePtr + buffPtrOffset);
+					dynCall('ipii', fileSaveReceivedDataPtr, [currfilePtr, 0, value.length]);
+				}
+				dynCall('vpi', freeFilePtr, [currfilePtr, 0]);
+			})
+			.catch(e => {
+				dynCall('vpi', freeFilePtr, [currfilePtr, 0]);
+			});
+	}, url, file, offsetof(httpfile_t, buf), offsetof(httpfile_t, reported_size), &HTTP_FileSaveReceivedData, &HTTP_FreeFile);
+	file->pfn_process = HTTP_FileFree; //do nothing
+#else
 	file->pfn_process = HTTP_FileResolveNS;
+#endif
 	file->blocktime = file->downloaded = file->lastchecksize = file->checktime = 0;
 	return 1;
 }
