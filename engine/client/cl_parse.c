@@ -364,15 +364,12 @@ CL_ParseSoundFade
 */
 void CL_ParseSoundFade( sizebuf_t *msg )
 {
-	float	fadePercent, fadeOutSeconds;
-	float	holdTime, fadeInSeconds;
+	int fade_percent = MSG_ReadByte( msg );
+	int hold_time = MSG_ReadByte( msg );
+	int fade_out_seconds = MSG_ReadByte( msg );
+	int fade_in_seconds = MSG_ReadByte( msg );
 
-	fadePercent = (float)MSG_ReadByte( msg );
-	holdTime = (float)MSG_ReadByte( msg );
-	fadeOutSeconds = (float)MSG_ReadByte( msg );
-	fadeInSeconds = (float)MSG_ReadByte( msg );
-
-	S_FadeClientVolume( fadePercent, fadeOutSeconds, holdTime, fadeInSeconds );
+	S_SoundFade( fade_percent, hold_time, fade_out_seconds, fade_in_seconds );
 }
 
 /*
@@ -543,7 +540,7 @@ static void CL_StartResourceDownloading( const char *pszMessage, qboolean bCusto
 {
 	resourceinfo_t	ri;
 
-	if( COM_CheckString( pszMessage ))
+	if( !COM_StringEmptyOrNULL( pszMessage ))
 		Con_DPrintf( "%s", pszMessage );
 
 	cls.dl.nTotalSize = COM_SizeofResourceList( &cl.resourcesneeded, &ri );
@@ -858,7 +855,7 @@ void CL_ParseServerData( sizebuf_t *msg, connprotocol_t proto )
 		COM_StripExtension( clgame.mapname );
 
 		s = MSG_ReadString( msg );
-		if( COM_CheckStringEmpty( s ))
+		if( !COM_StringEmpty( s ))
 			Con_Printf( "Server map cycle: %s\n", s ); // VALVEWHY?
 
 		if( MSG_ReadByte( msg ))
@@ -1413,7 +1410,7 @@ void CL_UpdateUserinfo( sizebuf_t *msg, connprotocol_t proto )
 		player->spectator = Q_atoi( Info_ValueForKey( player->userinfo, "*hltv" ));
 		MSG_ReadBytes( msg, player->hashedcdkey, sizeof( player->hashedcdkey ));
 
-		if( proto == PROTO_GOLDSRC && ( !COM_CheckStringEmpty( player->userinfo ) || !COM_CheckStringEmpty( player->name )))
+		if( proto == PROTO_GOLDSRC && ( COM_StringEmpty( player->userinfo ) || COM_StringEmpty( player->name )))
 			active = false;
 
 		if( active && slot == cl.playernum )
@@ -2212,20 +2209,20 @@ void CL_ParseExec( sizebuf_t *msg )
 
 	is_class = MSG_ReadByte( msg );
 
-	if ( is_class )
+	if( is_class )
 	{
 		class_idx = MSG_ReadByte( msg );
 
-		if ( class_idx >= 0 && class_idx <= 11 && !Q_stricmp( GI->gamefolder, "tfc" ) )
+		if( class_idx >= 0 && class_idx <= 11 && !Q_stricmp( GI->gamefolder, "tfc" ) )
 			Cbuf_AddText( class_cfgs[class_idx] );
 	}
-	else if ( !Q_stricmp( GI->gamefolder, "tfc" ) )
+	else if( !Q_stricmp( GI->gamefolder, "tfc" ) )
 	{
 		Cbuf_AddText( "exec mapdefault.cfg\n" );
 
 		COM_FileBase( clgame.mapname, mapname, sizeof( mapname ));
 
-		if ( COM_CheckString( mapname ) )
+		if( !COM_StringEmptyOrNULL( mapname ) )
 			Cbuf_AddTextf( "exec %s.cfg\n", mapname );
 	}
 }
@@ -2241,7 +2238,7 @@ qboolean CL_DispatchUserMessage( const char *pszName, int iSize, void *pbuf )
 {
 	int	i;
 
-	if( !COM_CheckString( pszName ))
+	if( COM_StringEmptyOrNULL( pszName ))
 		return false;
 
 	for( i = 0; i < MAX_USER_MESSAGES; i++ )

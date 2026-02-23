@@ -38,7 +38,6 @@ GNU General Public License for more details.
 #include "tests.h"
 
 host_parm_t host;	// host parms
-static pfnChangeGame pChangeGame = NULL;
 static jmp_buf return_from_main_buf;
 
 /*
@@ -389,12 +388,10 @@ static int Host_CalcSleep( void )
 
 static void Host_NewInstance( const char *name, const char *finalmsg )
 {
-	if( !pChangeGame ) return;
-
 	host.change_game = true;
 
 	if( !Sys_NewInstance( name, finalmsg ))
-		pChangeGame( name ); // call from hl.exe
+		Con_Printf( S_ERROR "Failed to restart the engine\n" );
 }
 
 /*
@@ -560,7 +557,7 @@ static qboolean Host_RegisterDecal( const char *name, int *count )
 	char	shortname[MAX_QPATH];
 	int	i;
 
-	if( !COM_CheckString( name ))
+	if( COM_StringEmptyOrNULL( name ))
 		return 0;
 
 	COM_FileBase( name, shortname, sizeof( shortname ));
@@ -957,7 +954,7 @@ static int Host_CheckBugcomp_splitstr_handler( char *prev, char *next, void *use
 
 	*next = '\0';
 
-	if( !COM_CheckStringEmpty( prev ))
+	if( COM_StringEmpty( prev ))
 		return 0;
 
 	for( i = 0; i < ARRAYSIZE( bugcomp_features ); i++ )
@@ -1201,7 +1198,7 @@ static void Host_MainLoop( void *userdata )
 Host_Main
 =================
 */
-int EXPORT Host_Main( int argc, char **argv, const char *progname, int bChangeGame, pfnChangeGame func )
+int EXPORT Host_Main( int argc, char **argv, const char *progname, int bChangeGame, pfnChangeGame pChangeGame )
 {
 	static double oldtime;
 	string demoname, exename;
@@ -1212,8 +1209,6 @@ int EXPORT Host_Main( int argc, char **argv, const char *progname, int bChangeGa
 #endif
 
 	host.starttime = Platform_DoubleTime();
-
-	pChangeGame = func;	// may be NULL
 
 	Host_InitCommon( argc, argv, progname, bChangeGame, exename, sizeof( exename ));
 
@@ -1262,7 +1257,7 @@ int EXPORT Host_Main( int argc, char **argv, const char *progname, int bChangeGa
 	Netchan_Init();
 
 	// allow to change game from the console
-	if( pChangeGame != NULL )
+	if( pChangeGame != NULL && Sys_CanRestart( ))
 	{
 		Cmd_AddRestrictedCommand( "game", Host_ChangeGame_f, "change game" );
 		Cvar_Get( "host_allow_changegame", "1", FCVAR_READ_ONLY, "allows to change games" );
@@ -1328,7 +1323,6 @@ int EXPORT Host_Main( int argc, char **argv, const char *progname, int bChangeGa
 	}
 
 	host.change_game = false;	// done
-	Cmd_RemoveCommand( "setgl" );
 	Cbuf_ExecStuffCmds();	// execute stuffcmds (commandline)
 	SCR_CheckStartupVids();	// must be last
 

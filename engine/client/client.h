@@ -649,10 +649,16 @@ typedef struct
 	// server's build number (might be zero)
 	int build_num;
 	uint8_t steamid[8];
+	uint64_t server_steamid;
 
 	// whether server allows cheats or not
 	// set differently depending on protocol and extensions
 	qboolean allow_cheats;
+
+	// if server declares steam auth method, we can use our broker software to get the ticket
+	qboolean steam_auth;
+	qboolean broker_wait;
+	qboolean vac2_secure;
 } client_static_t;
 
 #ifdef __cplusplus
@@ -777,6 +783,7 @@ int CL_IsDevOverviewMode( void );
 void CL_SignonReply( connprotocol_t proto );
 void CL_ClearState( void );
 void CL_SetCheatState( qboolean multiplayer, qboolean allow_cheats );
+void CL_SendGoldSrcConnectPacket( netadr_t adr, int challenge, const void *ticket, size_t ticketlen );
 
 //
 // cl_demo.c
@@ -1146,8 +1153,7 @@ void S_EndRegistration( void );
 void S_RestoreSound( const vec3_t pos, int ent, int chan, sound_t handle, float fvol, float attn, int pitch, int flags, double sample, double end, int wordIndex );
 void S_StartSound( const vec3_t pos, int ent, int chan, sound_t sfx, float vol, float attn, int pitch, int flags );
 void S_AmbientSound( const vec3_t pos, int ent, sound_t handle, float fvol, float attn, int pitch, int flags );
-void S_FadeClientVolume( float fadePercent, float fadeOutSeconds, float holdTime, float fadeInSeconds );
-void S_FadeMusicVolume( float fadePercent );
+void S_SoundFade( int fade_percent, int hold_time, int fade_out_seconds, int fade_in_seconds );
 void S_StartLocalSound( const char *name, float volume, qboolean reliable );
 void SND_UpdateSound( void );
 void S_ExtraUpdate( void );
@@ -1192,6 +1198,15 @@ void Mobile_Shutdown( void );
 // cl_securedstub.c
 //
 void CL_GetSecuredClientAPI( CL_EXPORT_FUNCS F );
+
+//
+// cl_steam.c
+//
+void SteamBroker_Init( void );
+void SteamBroker_Shutdown( void );
+void SteamBroker_HandlePacket( netadr_t from, sizebuf_t *msg );
+int SteamBroker_InitiateGameConnection( netadr_t serveradr, int challenge );
+void SteamBroker_TerminateGameConnection( void );
 
 //
 // cl_video.c

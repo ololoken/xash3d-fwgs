@@ -955,7 +955,7 @@ static void CL_BeginUpload_f( void )
 
 	name = Cmd_Argv( 1 );
 
-	if( !COM_CheckString( name ))
+	if( COM_StringEmptyOrNULL( name ))
 		return;
 
 	if( !cl_allow_upload.value )
@@ -1066,13 +1066,6 @@ static void CL_WriteSteamTicket( sizebuf_t *send )
 		return;
 	}
 
-	//if( !Q_strcmp( cl_ticket_generator.string, "steam" )
-	//{
-	//	i = SteamBroker_InitiateGameConnection( buf, sizeof( buf ));
-	//	MSG_WriteBytes( send, buf, i );
-	//	return;
-	//}
-
 	ID_GetMD5ForAddress( key, adr, sizeof( key ));
 	CRC32_Init( &crc );
 	CRC32_ProcessBuffer( &crc, key, Q_strlen( key ));
@@ -1083,6 +1076,40 @@ static void CL_WriteSteamTicket( sizebuf_t *send )
 	// RevEmu2013: pTicket[1] = revHash (low), pTicket[5] = 0x01100001 (high)
 	*(uint32_t*)cls.steamid = LittleLong( ((uint32_t*)buf)[1] );
 	*(uint32_t*)(cls.steamid + 4) = LittleLong( ((uint32_t*)buf)[5] );
+}
+
+void CL_SendGoldSrcConnectPacket( netadr_t adr, int challenge, const void *ticket, size_t ticketlen )
+{
+	const char *name;
+	sizebuf_t send;
+	byte send_buf[2048];
+	char protinfo[MAX_INFO_STRING];
+
+	protinfo[0] = 0;
+
+	Info_SetValueForKey( protinfo, "prot", "3", sizeof( protinfo )); // steam auth type
+	Info_SetValueForKeyf( protinfo, "unique", sizeof( protinfo ), "%i", 0xffffffff );
+	Info_SetValueForKey( protinfo, "raw", "steam", sizeof( protinfo ));
+	CL_GetCDKey( protinfo, sizeof( protinfo ));
+	name = Info_ValueForKey( cls.userinfo, "name" );
+	if( cl_advertise_engine_in_name.value && Q_strnicmp( name, "[Xash3D]", 8 ))
+		Info_SetValueForKeyf( cls.userinfo, "name", sizeof( cls.userinfo ), "[Xash3D]%s", name );
+
+	MSG_Init( &send, "GoldSrcConnect", send_buf, sizeof( send_buf ));
+	MSG_WriteLong( &send, NET_HEADER_OUTOFBANDPACKET );
+	MSG_WriteStringf( &send, C2S_CONNECT" %i %i \"%s\" \"%s\"\n",
+		PROTOCOL_GOLDSRC_VERSION, challenge, protinfo, cls.userinfo );
+	MSG_SeekToBit( &send, -8, SEEK_CUR ); // rewrite null terminator
+	if( ticket == NULL )
+		CL_WriteSteamTicket( &send );
+	else
+		MSG_WriteBytes( &send, ticket, ticketlen );
+
+	if( MSG_CheckOverflow( &send ))
+		Con_Printf( S_ERROR "%s: %s overflow!\n", __func__, MSG_GetName( &send ) );
+
+	NET_SendPacket( NS_CLIENT, MSG_GetNumBytesWritten( &send ), MSG_GetData( &send ), adr );
+	Con_Printf( "Trying to connect with GoldSrc 48 protocol\n" );
 }
 
 /*
@@ -1126,33 +1153,24 @@ static void CL_SendConnectPacket( connprotocol_t proto, int challenge )
 		Info_SetValueForKey( protinfo, "a", Q_buildarch(), sizeof( protinfo ) );
 	}
 
+	cls.broker_wait = false;
+
 	if( proto == PROTO_GOLDSRC )
 	{
-		const char *name;
-		sizebuf_t send;
-		byte send_buf[2048];
+		// if the cl_ticket_generator is set to "steam" we need to get ticket
+		// from steam broker, which is asynchronous process by nature
+		if( !Q_stricmp( cl_ticket_generator.string, "steam" ))
+		{
+			if( SteamBroker_InitiateGameConnection( adr, challenge ))
+			{
+				// we are waiting for the broker response...
+				cls.broker_wait = true;
+				cls.timestart = Platform_DoubleTime();
+				return;
+			}
+		}
 
-		Info_SetValueForKey( protinfo, "prot", "3", sizeof( protinfo )); // steam auth type
-		Info_SetValueForKeyf( protinfo, "unique", sizeof( protinfo ), "%i", 0xffffffff );
-		Info_SetValueForKey( protinfo, "raw", "steam", sizeof( protinfo ));
-		CL_GetCDKey( protinfo, sizeof( protinfo ));
-
-		name = Info_ValueForKey( cls.userinfo, "name" );
-		if( cl_advertise_engine_in_name.value && Q_strnicmp( name, "[Xash3D]", 8 ))
-			Info_SetValueForKeyf( cls.userinfo, "name", sizeof( cls.userinfo ), "[Xash3D]%s", name );
-
-		MSG_Init( &send, "GoldSrcConnect", send_buf, sizeof( send_buf ));
-		MSG_WriteLong( &send, NET_HEADER_OUTOFBANDPACKET );
-		MSG_WriteStringf( &send, C2S_CONNECT" %i %i \"%s\" \"%s\"\n",
-			PROTOCOL_GOLDSRC_VERSION, challenge, protinfo, cls.userinfo );
-		MSG_SeekToBit( &send, -8, SEEK_CUR ); // rewrite null terminator
-		CL_WriteSteamTicket( &send );
-
-		if( MSG_CheckOverflow( &send ))
-			Con_Printf( S_ERROR "%s: %s overflow!\n", __func__, MSG_GetName( &send ) );
-
-		NET_SendPacket( NS_CLIENT, MSG_GetNumBytesWritten( &send ), MSG_GetData( &send ), adr );
-		Con_Printf( "Trying to connect with GoldSrc 48 protocol\n" );
+		CL_SendGoldSrcConnectPacket( adr, challenge, NULL, 0 );
 	}
 	else
 	{
@@ -1332,7 +1350,7 @@ static void CL_CheckForResend( void )
 		else
 			CL_SendBandwidthTest( adr, false );
 	}
-	else
+	else if( !cls.broker_wait )
 	{
 		Con_Printf( "Connecting to %s... (retry #%i)\n", cls.servername, cls.connect_retry );
 		CL_SendGetChallenge( adr );
@@ -1478,7 +1496,7 @@ static void CL_Rcon_f( void )
 	netadr_t to;
 	int	i;
 
-	if( !COM_CheckString( rcon_password.string ))
+	if( COM_StringEmptyOrNULL( rcon_password.string ))
 	{
 		Con_Printf( "You must set 'rcon_password' before issuing an rcon command.\n" );
 		return;
@@ -1492,7 +1510,7 @@ static void CL_Rcon_f( void )
 	}
 	else
 	{
-		if( !COM_CheckString( rcon_address.string ))
+		if( COM_StringEmptyOrNULL( rcon_address.string ))
 		{
 			Con_Printf( "You must either be connected or set the 'rcon_address' cvar to issue rcon commands\n" );
 			return;
@@ -1698,6 +1716,7 @@ void CL_Disconnect( void )
 
 	// send a disconnect message to the server
 	CL_SendDisconnectMessage( cls.legacymode );
+	SteamBroker_TerminateGameConnection();
 	CL_ClearState ();
 
 	S_StopBackgroundTrack ();
@@ -1863,7 +1882,7 @@ static void CL_Reconnect_f( void )
 		return;
 	}
 
-	if( COM_CheckString( cls.servername ))
+	if( !COM_StringEmptyOrNULL( cls.servername ))
 	{
 		connprotocol_t proto = cls.legacymode;
 
@@ -1889,7 +1908,7 @@ retry connection to last server
 */
 static void CL_Retry_f( void )
 {
-	if( !COM_CheckString( cls.servername ))
+	if( COM_StringEmptyOrNULL( cls.servername ))
 	{
 		Con_Printf( "Can't retry, no previous connection.\n" );
 		return;
@@ -2001,17 +2020,17 @@ static void CL_ParseStatusMessage( netadr_t from, sizebuf_t *msg )
 
 	CL_FixupColorStringsForInfoString( s, infostring, sizeof( infostring ));
 
-	if( !COM_CheckString( Info_ValueForKey( infostring, "gamedir" )))
+	if( COM_StringEmptyOrNULL( Info_ValueForKey( infostring, "gamedir" )))
 		return; // unsupported proto
 
-	if( !COM_CheckString( Info_ValueForKey( infostring, "host" )))
+	if( COM_StringEmptyOrNULL( Info_ValueForKey( infostring, "host" )))
 		return;
 
-	if( !COM_CheckString( Info_ValueForKey( infostring, "map" )))
+	if( COM_StringEmptyOrNULL( Info_ValueForKey( infostring, "map" )))
 		return;
 
 	// don't let servers pretend they're something else
-	if( COM_CheckString( Info_ValueForKey( infostring, "gs" )))
+	if( !COM_StringEmptyOrNULL( Info_ValueForKey( infostring, "gs" )))
 		return;
 
 	maxcl = Q_atoi( Info_ValueForKey( infostring, "maxcl" ));
@@ -2372,7 +2391,7 @@ static void CL_Print( const char *c, const char *args, netadr_t from, sizebuf_t 
 
 	s = c[0] == A2C_GOLDSRC_PRINT ? args + 1 : MSG_ReadString( msg );
 
-	if( !COM_CheckStringEmpty( s ))
+	if( COM_StringEmpty( s ))
 		return;
 
 	Con_Printf( "Remote message from %s:\n", NET_AdrToString( from ));
@@ -2389,7 +2408,20 @@ static void CL_Challenge( const char *c, netadr_t from )
 
 	// try to autodetect protocol by challenge response
 	if( !Q_strcmp( c, S2C_GOLDSRC_CHALLENGE ))
+	{
 		cls.legacymode = PROTO_GOLDSRC;
+
+		cls.steam_auth = Q_atoi( Cmd_Argv( 2 )) == 3;
+
+		if( Cmd_Argc( ) == 5 && cls.steam_auth )
+		{
+			// arg 2 auth protocol, we only support steam
+			// arg 3 if steam is server's steam id
+			// arg 4 if steam is server's VAC status
+			cls.server_steamid = strtoull( Cmd_Argv( 3 ), NULL, 10 );
+			cls.vac2_secure = Q_atoi( Cmd_Argv( 4 ));
+		}
+	}
 
 	cls.bandwidth_test.challenge = Q_atoi( Cmd_Argv( 1 ));
 
@@ -2553,6 +2585,10 @@ static void CL_ConnectionlessPacket( netadr_t from, sizebuf_t *msg )
 		Con_Reportf( "%s: %s : %s\n", __func__, NET_AdrToString( from ), c );
 
 	// server connection
+	if( !Q_strcmp( c, "sb_connect" ))
+	{
+		SteamBroker_HandlePacket( from, msg );
+	}
 	if( !Q_strcmp( c, S2C_GOLDSRC_CONNECTION ) || !Q_strcmp( c, S2C_CONNECTION ))
 	{
 		CL_ClientConnect( cls.legacymode, c, from );
@@ -2826,7 +2862,7 @@ Replace the displayed name for some resources
 */
 static const char *CL_CleanFileName( const char *filename )
 {
-	if( COM_CheckString( filename ) && filename[0] == '!' )
+	if( !COM_StringEmptyOrNULL( filename ) && filename[0] == '!' )
 		return "customization";
 
 	return filename;
@@ -2881,7 +2917,7 @@ void CL_ProcessFile( qboolean successfully_received, const char *filename )
 	byte		rgucMD5_hash[16];
 	resource_t	*p;
 
-	if( COM_CheckString( filename ) && successfully_received )
+	if( !COM_StringEmptyOrNULL( filename ) && successfully_received )
 	{
 		if( filename[0] != '!' )
 			Con_Printf( "processing %s\n", filename );
@@ -3325,7 +3361,7 @@ static void CL_ListMessages_f( void )
 	Con_Printf( "num size name\n" );
 	for( i = 0; i < MAX_USER_MESSAGES; i++ )
 	{
-		if( !COM_CheckStringEmpty( clgame.msg[i].name ))
+		if( COM_StringEmpty( clgame.msg[i].name ))
 			break;
 
 		Con_Printf( "%3d\t%3d\t%s\n", clgame.msg[i].number, clgame.msg[i].size, clgame.msg[i].name );
@@ -3653,6 +3689,7 @@ void CL_Init( void )
 		Host_Error( "can't initialize %s: %s\n", libpath, COM_GetLibraryError( ));
 
 	ID_Init();
+	SteamBroker_Init();
 
 	cls.build_num = 0;
 	cls.initialized = true;
@@ -3684,6 +3721,7 @@ void CL_Shutdown( void )
 	Mobile_Shutdown ();
 	SCR_Shutdown ();
 	CL_UnloadProgs ();
+	SteamBroker_Shutdown();
 	cls.initialized = false;
 
 	// for client-side VGUI support we use other order
@@ -3697,5 +3735,4 @@ void CL_Shutdown( void )
 	R_Shutdown ();
 
 	Con_Shutdown ();
-
 }

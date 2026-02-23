@@ -32,7 +32,7 @@ static MALLOC_LIKE( FS_FreeSound, 1 ) wavdata_t *SoundPack( void )
 	wavdata_t *pack = Mem_Malloc( host.soundpool, sizeof( *pack ) + sound.size );
 
 	pack->size = sound.size;
-	pack->loopStart = sound.loopstart;
+	pack->loop_start = sound.loopstart;
 	pack->samples = sound.samples;
 	pack->type = sound.type;
 	pack->flags = sound.flags;
@@ -64,7 +64,7 @@ wavdata_t *FS_LoadSound( const char *filename, const byte *buffer, size_t size )
 	Sound_Reset(); // clear old sounddata
 	Q_strncpy( loadname, filename, sizeof( loadname ));
 
-	if( COM_CheckStringEmpty( ext ))
+	if( !COM_StringEmpty( ext ))
 	{
 		// we needs to compare file extension with list of supported formats
 		// and be sure what is real extension, not a filename with dot
@@ -168,7 +168,7 @@ stream_t *FS_OpenStream( const char *filename )
 	Sound_Reset(); // clear old streaminfo
 	Q_strncpy( loadname, filename, sizeof( loadname ));
 
-	if( COM_CheckStringEmpty( ext ))
+	if( !COM_StringEmpty( ext ))
 	{
 		// we needs to compare file extension with list of supported formats
 		// and be sure what is real extension, not a filename with dot
