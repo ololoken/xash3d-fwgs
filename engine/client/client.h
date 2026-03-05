@@ -22,8 +22,8 @@ GNU General Public License for more details.
 #include "menu_int.h"
 #include "cl_entity.h"
 #include "mod_local.h"
+#include "pmove.h"
 #include "pm_defs.h"
-#include "pm_movevars.h"
 #include "ref_params.h"
 #include "render_api.h"
 #include "cdll_exp.h"
@@ -34,6 +34,7 @@ GNU General Public License for more details.
 #include "world.h"
 #include "ref_common.h"
 #include "voice.h"
+#include "q_client.h"
 
 // client sprite types
 #define SPR_CLIENT		0	// client sprite for temp-entities or user-textures
@@ -850,7 +851,7 @@ void CL_ClearWorld( void );
 void CL_DrawCenterPrint( void );
 void CL_ClearSpriteTextures( void );
 void CL_CenterPrint( const char *text, float y );
-void CL_TextMessageParse( byte *pMemFile, int fileSize );
+client_textmessage_t *CL_TextMessageParse( poolhandle_t mempool, byte *pMemFile, int fileSize, int *numTitles );
 client_textmessage_t *CL_TextMessageGet( const char *pName );
 void NetAPI_CancelAllRequests( void );
 model_t *CL_LoadClientSprite( const char *filename );

@@ -16,7 +16,6 @@ GNU General Public License for more details.
 #include <math.h>	// fabs...
 #include "common.h"
 #include "base_cmd.h"
-#include "eiface.h" // ARRAYSIZE
 
 static convar_t	*cvar_vars = NULL; // head of list
 static poolhandle_t cvar_pool;
@@ -1018,12 +1017,6 @@ qboolean Cvar_CommandWithPrivilegeCheck( convar_t *v, qboolean isPrivileged )
 		else Con_Printf( "\"%s\" is \"%s\"\n", v->name, v->string );
 
 		return true;
-	}
-
-	if( host.apply_game_config )
-	{
-		if( !FBitSet( v->flags, FCVAR_EXTDLL ))
-			return true; // only game.dll cvars passed
 	}
 
 	if( FBitSet( v->flags, FCVAR_SPONLY ) && CL_GetMaxClients() > 1 )
