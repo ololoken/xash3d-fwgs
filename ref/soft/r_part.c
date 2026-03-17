@@ -67,7 +67,7 @@ void GAME_EXPORT CL_DrawParticles( double frametime, particle_t *cl_active_parti
 
 	for( p = cl_active_particles; p; p = p->next )
 	{
-		if(( p->type != pt_blob ) || ( p->packedColor == 255 ))
+		if(( p->type != pt_blob ) || ( p->unused == 255 ))
 		{
 			size = partsize; // get initial size of particle
 
@@ -127,33 +127,8 @@ check tracer bbox
 */
 static qboolean CL_CullTracer( particle_t *p, const vec3_t start, const vec3_t end )
 {
-	vec3_t mins, maxs;
-	int    i;
+	// culling is undone in ref_soft
 	return false;
-/*
-	// compute the bounding box
-	for( i = 0; i < 3; i++ )
-	{
-		if( start[i] < end[i] )
-		{
-			mins[i] = start[i];
-			maxs[i] = end[i];
-		}
-		else
-		{
-			mins[i] = end[i];
-			maxs[i] = start[i];
-		}
-
-		// don't let it be zero sized
-		if( mins[i] == maxs[i] )
-		{
-			maxs[i] += gTracerSize[p->type] * 2.0f;
-		}
-	}
-
-	// check bbox
-	return R_CullBox( mins, maxs );*/
 }
 
 /*
@@ -216,7 +191,7 @@ void GAME_EXPORT CL_DrawTracers( double frametime, particle_t *cl_active_tracers
 			vec3_t  verts[4], tmp2;
 			vec3_t  tmp, normal;
 			color24 color;
-			short   alpha = p->packedColor;
+			short   alpha = p->unused;
 
 			// Transform point into screen space
 			TriWorldToScreen( start, screen );
@@ -271,9 +246,9 @@ void GAME_EXPORT CL_DrawTracers( double frametime, particle_t *cl_active_tracers
 			p->vel[1] *= scale;
 			p->vel[2] -= gravity;
 
-			p->packedColor = 255 * ( p->die - gp_cl->time ) * 2;
-			if( p->packedColor > 255 )
-				p->packedColor = 255;
+			p->unused = 255 * ( p->die - gp_cl->time ) * 2;
+			if( p->unused > 255 )
+				p->unused = 255;
 		}
 		else if( p->type == pt_slowgrav )
 		{
@@ -297,7 +272,6 @@ void GAME_EXPORT CL_DrawParticlesExternal( const ref_viewpass_t *rvp, qboolean t
 
 	R_SetupRefParams( rvp );
 	R_SetupFrustum();
-//	R_SetupGL( false );	// don't touch GL-states
 
 	// setup PVS for frame
 	memcpy( RI.visbytes, tr.visbytes, gpGlobals->visbytes );
