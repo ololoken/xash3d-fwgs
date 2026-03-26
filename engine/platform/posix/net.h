@@ -78,10 +78,13 @@ GNU General Public License for more details.
 
 #if !XASH_PSVITA
 #define ioctlsocket ioctl
-#endif // XASH_PSVITA
+#endif // !XASH_PSVITA
+
 #define closesocket close
 #endif
+
 #define SOCKET int
+
 typedef int WSAsize_t;
 
 #endif // NET_H
