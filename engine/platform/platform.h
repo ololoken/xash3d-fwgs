@@ -58,7 +58,7 @@ char *Posix_Input( void );
 #endif
 
 #if XASH_SDL
-void SDLash_Init( const char *basedir );
+void SDLash_Init( void );
 void SDLash_Shutdown( void );
 void SDLash_NanoSleep( int nsec );
 #endif
@@ -111,7 +111,7 @@ void Linux_SetTimer( float time );
 int Linux_GetProcessID( void );
 #endif
 
-static inline void Platform_Init( qboolean con_showalways, const char *basedir )
+static inline void Platform_Init( qboolean con_showalways )
 {
 #if XASH_POSIX
 	// daemonize as early as possible, because we need to close our file descriptors
@@ -119,7 +119,7 @@ static inline void Platform_Init( qboolean con_showalways, const char *basedir )
 #endif
 
 #if XASH_SDL
-	SDLash_Init( basedir );
+	SDLash_Init( );
 #endif
 
 #if XASH_ANDROID
@@ -389,14 +389,16 @@ qboolean VoiceCapture_Lock( qboolean lock );
 			pid_t raise_tid = Linux_GetProcessID(); \
 			int raise_sig = (x); \
 			__asm__ volatile (  \
+				"push {r7}\n\t" \
 				"mov r7,#268\n\t" \
 				"mov r0,%0\n\t" \
 				"mov r1,%1\n\t" \
 				"mov r2,%2\n\t" \
 				"svc 0\n\t" \
+				"pop {r7}\n\t" \
 				: \
 				: "r"(raise_pid), "r"(raise_tid), "r"(raise_sig) \
-				: "r0", "r1", "r2", "r7", "memory" \
+				: "r0", "r1", "r2", "memory" \
 			); \
 		} while( 0 )
 	#define INLINE_NANOSLEEP1() do \
@@ -404,13 +406,15 @@ qboolean VoiceCapture_Lock( qboolean lock );
 			struct timespec ns_t1 = {1, 0}; \
 			struct timespec ns_t2 = {0, 0}; \
 			__asm__ volatile ( \
+				"push {r7}\n\t" \
 				"mov r7,#162\n\t" \
 				"mov r0,%0\n\t" \
 				"mov r1,%1\n\t" \
 				"svc 0\n\t" \
+				"pop {r7}\n\t" \
 				: \
 				: "r"(&ns_t1), "r"(&ns_t2) \
-				: "r0", "r1", "r7", "memory" \
+				: "r0", "r1", "memory" \
 			); \
 		} while( 0 )
 #elif XASH_LINUX && XASH_ARM && XASH_64BIT

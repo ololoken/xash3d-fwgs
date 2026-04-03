@@ -17,10 +17,12 @@ ARCH_TRIPLET[armhf]=arm-linux-gnueabihf
 ARCH_TRIPLET[riscv64]=riscv64-linux-gnu
 ARCH_TRIPLET[ppc64el]=powerpc64le-linux-gnu
 CROSS_COMPILE_CC[amd64]=cc
+CROSS_COMPILE_CC[arm64]=cc
 CROSS_COMPILE_CC[i386]="cc -m32"
 CROSS_COMPILE_CXX[amd64]=c++
+CROSS_COMPILE_CXX[arm64]=c++
 CROSS_COMPILE_CXX[i386]="c++ -m32"
-for i in arm64 armhf riscv64 ppc64el; do
+for i in armhf riscv64 ppc64el; do
 	CROSS_COMPILE_CC[$i]=${ARCH_TRIPLET[$i]}-gcc
 	CROSS_COMPILE_CXX[$i]=${ARCH_TRIPLET[$i]}-g++
 done
@@ -71,7 +73,7 @@ build_engine()
 	fi
 
 	# shellcheck disable=SC2086
-	./waf configure $WAF_EXTRA_ARGS --enable-lto --enable-bundled-deps -s SDL2_linux --enable-stbtt --enable-utils --enable-tui --enable-dedicated || die_configure
+	./waf configure $WAF_EXTRA_ARGS --enable-lto --enable-bundled-deps -s SDL2_linux --enable-stbtt --enable-utils --enable-tui --enable-dedicated --enable-all-renderers || die_configure
 
 	./waf build || die_configure
 }
