@@ -87,10 +87,8 @@ void D_ViewChanged( void )
 	/*
 	** clear Z-buffer and color-buffers if we're doing the gallery
 	*/
-	if( !RI.drawWorld )
-	{
+	if( !FBitSet( RI.rvp.flags, RF_DRAW_WORLD ))
 		memset( d_pzbuffer, 0xff, vid.width * vid.height * sizeof( d_pzbuffer[0] ));
-	}
 
 	D_Patch();
 }
@@ -184,8 +182,8 @@ static void R_ViewChanged( vrect_t *vr )
 
 	RI.vrect = *vr;
 
-	horizontalFieldOfView = 2 * tan((float)RI.fov_x / 360.0f * M_PI_F );
-	verticalFieldOfView = 2 * tan((float)RI.fov_y / 360.0f * M_PI_F );
+	horizontalFieldOfView = 2 * tan((float)RI.rvp.fov_x / 360.0f * M_PI_F );
+	verticalFieldOfView = 2 * tan((float)RI.rvp.fov_y / 360.0f * M_PI_F );
 
 	RI.fvrectx = (float)RI.vrect.x;
 	RI.fvrectx_adj = (float)RI.vrect.x - 0.5f;
@@ -288,14 +286,14 @@ void R_SetupFrameQ( void )
 
 
 // build the transformation matrix for the given view angles
-	VectorCopy( RI.vieworg, tr.modelorg );
+	VectorCopy( RI.rvp.vieworigin, tr.modelorg );
 
-	// AngleVectors (RI.viewangles, RI.vforward, RI.vright, RI.vup);
+	// AngleVectors (RI.rvp.viewangles, RI.vforward, RI.vright, RI.vup);
 
 // current viewleaf
-	if( RI.drawWorld )
+	if( FBitSet( RI.rvp.flags, RF_DRAW_WORLD ))
 	{
-		RI.viewleaf = gEngfuncs.Mod_PointInLeaf( RI.vieworg, WORLDMODEL->nodes );
+		RI.viewleaf = gEngfuncs.Mod_PointInLeaf( RI.rvp.vieworigin, WORLDMODEL->nodes );
 		r_viewcluster = RI.viewleaf->cluster;
 	}
 
@@ -307,10 +305,10 @@ void R_SetupFrameQ( void )
 	vrect.y = 0;//r_newrefdef.y;
 	vrect.width = gpGlobals->width;
 	vrect.height = gpGlobals->height;*/
-	vrect.x = RI.viewport[0];
-	vrect.y = RI.viewport[1];
-	vrect.width = RI.viewport[2];
-	vrect.height = RI.viewport[3];
+	vrect.x = RI.rvp.viewport[0];
+	vrect.y = RI.rvp.viewport[1];
+	vrect.width = RI.rvp.viewport[2];
+	vrect.height = RI.rvp.viewport[3];
 
 	d_viewbuffer = (void *)vid.buffer;
 	r_screenwidth = vid.rowbytes;

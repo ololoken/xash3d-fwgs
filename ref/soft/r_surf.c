@@ -53,7 +53,7 @@ static void     (*surfmiptable[4])( void ) = {
 };
 
 // void R_BuildLightMap (void);
-extern unsigned blocklights[10240]; // allow some very large lightmaps
+static unsigned blocklights[10240]; // allow some very large lightmaps
 
 static float           surfscale;
 static qboolean        r_cache_thrash;         // set if surface cache is thrashing
@@ -62,7 +62,6 @@ static int sc_size;
 surfcache_t     *sc_rover;
 static surfcache_t *sc_base;
 
-static int      rtable[MOD_FRAMES][MOD_FRAMES];
 
 static void R_BuildLightMap( void );
 /*
@@ -108,7 +107,7 @@ static void R_AddDynamicLights( const msurface_t *surf )
 		if( !FBitSet( surf->dlightbits, BIT( lnum )))
 			continue; // not lit by this light
 
-		dl = &tr.dlights[lnum];
+		dl = &gp_dlights[lnum];
 
 		// transform light origin to local bmodel space
 		if( !tr.modelviewIdentity )
@@ -209,7 +208,7 @@ static void R_BuildLightMap( void )
 		if( surf->styles[map] >= 255 )
 			break;
 
-		scale = tr.lightstylevalue[surf->styles[map]];
+		scale = g_lightstylevalue[surf->styles[map]];
 
 		for( i = 0; i < size; i++ )
 			blocklights[i] += ( lm[i].r + lm[i].g + lm[i].b ) * scale;
@@ -238,20 +237,6 @@ static void R_BuildLightMap( void )
 	}
 }
 
-void GL_InitRandomTable( void )
-{
-	int tu, tv;
-
-	for( tu = 0; tu < MOD_FRAMES; tu++ )
-	{
-		for( tv = 0; tv < MOD_FRAMES; tv++ )
-		{
-			rtable[tu][tv] = gEngfuncs.COM_RandomLong( 0, 0x7FFF );
-		}
-	}
-
-	gEngfuncs.COM_SetRandomSeed( 0 );
-}
 
 /*
 ===============
@@ -1118,7 +1103,7 @@ surfcache_t *D_CacheSurface( msurface_t *surface, int miplevel )
 	// check for lightmap modification
 	for( maps = 0; maps < MAXLIGHTMAPS && surface->styles[maps] != 255; maps++ )
 	{
-		if( tr.lightstylevalue[surface->styles[maps]] != surface->cached_light[maps] )
+		if( g_lightstylevalue[surface->styles[maps]] != surface->cached_light[maps] )
 		{
 			surface->dlightframe = tr.framecount;
 		}
@@ -1188,10 +1173,7 @@ surfcache_t *D_CacheSurface( msurface_t *surface, int miplevel )
 	cache->lightadj[1] = r_drawsurf.lightadj[1];
 	cache->lightadj[2] = r_drawsurf.lightadj[2];
 	cache->lightadj[3] = r_drawsurf.lightadj[3];
-	for( maps = 0; maps < MAXLIGHTMAPS && surface->styles[maps] != 255; maps++ )
-	{
-		surface->cached_light[maps] = tr.lightstylevalue[surface->styles[maps]];
-	}
+	R_UpdateSurfaceCachedLight( surface );
 //
 // draw and light the surface texture
 //

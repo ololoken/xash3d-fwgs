@@ -75,11 +75,6 @@ static qboolean R_AddEntity( struct cl_entity_s *clent, int type )
 	return true;
 }
 
-static void CL_AddCustomBeam( cl_entity_t *pEnvBeam )
-{
-	;
-}
-
 static void R_ProcessEntData( qboolean allocate, cl_entity_t *entities, unsigned int max_entities )
 {
 	;
@@ -177,22 +172,6 @@ static void CL_RunLightStyles( lightstyle_t *ls )
 
 }
 
-static void R_GetSpriteParms( int *frameWidth, int *frameHeight, int *numFrames, int currentFrame, const model_t *pSprite )
-{
-	if( frameWidth )
-		*frameWidth	= 0;
-
-	if( frameHeight )
-		*frameHeight = 0;
-
-	if( numFrames )
-		*numFrames = 0;
-}
-
-static int R_GetSpriteTexture( const model_t *m_pSpriteModel, int frame )
-{
-	return 0;
-}
 
 static qboolean Mod_ProcessRenderData( model_t *mod, qboolean create, const byte *buffer, size_t buffersize )
 {
@@ -460,7 +439,6 @@ static const ref_interface_t gReffuncs =
 	.GL_SetRenderMode = R_SimpleStubInt,
 
 	.R_AddEntity      = R_AddEntity,
-	.CL_AddCustomBeam = CL_AddCustomBeam,
 	.R_ProcessEntData = R_ProcessEntData,
 	.R_Flush          = R_SimpleStubUInt,
 
@@ -495,8 +473,6 @@ static const ref_interface_t gReffuncs =
 	.GL_SubdivideSurface = GL_SubdivideSurface,
 	.CL_RunLightStyles   = CL_RunLightStyles,
 
-	.R_GetSpriteParms    = R_GetSpriteParms,
-	.R_GetSpriteTexture  = R_GetSpriteTexture,
 
 	.Mod_ProcessRenderData  = Mod_ProcessRenderData,
 	.Mod_StudioLoadTextures = Mod_StudioLoadTextures,
@@ -539,8 +515,6 @@ static const ref_interface_t gReffuncs =
 	.GL_TextureTarget       = R_SimpleStubUInt,
 	.GL_TexCoordArrayMode   = R_SimpleStubUInt,
 	.GL_UpdateTexSize       = GL_UpdateTexSize,
-	.GL_Reserved0           = NULL,
-	.GL_Reserved1           = NULL,
 
 	.GL_DrawParticles = GL_DrawParticles,
 	.LightVec         = LightVec,

@@ -578,7 +578,7 @@ static void R_AliasDynamicLight( cl_entity_t *ent, alight_t *plight )
 	if( !plight || !ent )
 		return;
 
-	if( !RI.drawWorld || r_fullbright->value || FBitSet( ent->curstate.effects, EF_FULLBRIGHT ))
+	if( !FBitSet( RI.rvp.flags, RF_DRAW_WORLD ) || r_fullbright->value || FBitSet( ent->curstate.effects, EF_FULLBRIGHT ))
 	{
 		plight->shadelight = 0;
 		plight->ambientlight = 192;
@@ -684,7 +684,7 @@ static void R_AliasDynamicLight( cl_entity_t *ent, alight_t *plight )
 
 	for( lnum = 0; lnum < MAX_DLIGHTS; lnum++ )
 	{
-		const dlight_t *dl = &tr.dlights[lnum];
+		const dlight_t *dl = &gp_dlights[lnum];
 
 		if( dl->die < g_alias.time || !r_dynamic->value )
 			continue;
@@ -1126,7 +1126,7 @@ init current time for a given model
 */
 static void R_AliasSetupTimings( void )
 {
-	if( RI.drawWorld )
+	if( FBitSet( RI.rvp.flags, RF_DRAW_WORLD ))
 	{
 		// synchronize with server time
 		g_alias.time = gp_cl->time;
