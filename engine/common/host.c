@@ -1288,6 +1288,10 @@ int EXPORT Host_Main( int argc, char **argv, const char *progname, int bChangeGa
 	Cbuf_ExecStuffCmds();	// execute stuffcmds (commandline)
 	SCR_CheckStartupVids();	// must be last
 
+#ifndef XASH_DEDICATED
+	IN_GyroCheckAvailability();
+#endif
+
 	if( Sys_GetParmFromCmdLine( "-timedemo", demoname ))
 		Cbuf_AddTextf( "timedemo %s\n", demoname );
 
