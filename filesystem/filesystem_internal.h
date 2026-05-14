@@ -139,7 +139,8 @@ extern const fs_api_t     g_api;
 #define Mem_Calloc( pool, size ) _Mem_Alloc( pool, size, true, __FILE__, __LINE__ )
 #define Mem_Realloc( pool, ptr, size ) g_engfuncs._Mem_Realloc( pool, ptr, size, true, __FILE__, __LINE__ )
 #define Mem_Free( mem ) _Mem_Free( mem, __FILE__, __LINE__ )
-#define Mem_AllocPool( name ) g_engfuncs._Mem_AllocPool( name, __FILE__, __LINE__ )
+#define Mem_AllocPool( name ) g_engfuncs._Mem_AllocPool( name, 0, __FILE__, __LINE__ )
+#define Mem_AllocPoolExt( name, flags ) g_engfuncs._Mem_AllocPool( name, flags, __FILE__, __LINE__ )
 #define Mem_FreePool( pool ) g_engfuncs._Mem_FreePool( pool, __FILE__, __LINE__ )
 
 #define Con_Printf  (*g_engfuncs._Con_Printf)
@@ -218,15 +219,14 @@ qboolean FS_Delete( const char *path );
 qboolean FS_SysFileExists( const char *path );
 const char *FS_GetDiskPath( const char *name, qboolean gamedironly );
 qboolean FS_GetFullDiskPath( char *buffer, size_t size, const char *name, qboolean gamedironly );
-void     FS_CreatePath( char *path );
+void FS_CreatePath( char *path );
 qboolean FS_SysFolderExists( const char *path );
 qboolean FS_SysFileOrFolderExists( const char *path );
 file_t  *FS_OpenReadFile( const char *filename, const char *mode, qboolean gamedironly );
 
-int           FS_SysFileTime( const char *filename );
-file_t       *FS_OpenHandle( searchpath_t *search, int handle, fs_offset_t offset, fs_offset_t len );
-file_t       *FS_SysOpen( const char *filepath, const char *mode );
-searchpath_t *FS_FindFile( const char *name, int *index, char *fixedname, size_t len, qboolean gamedironly );
+int FS_SysFileTime( const char *filename );
+file_t *FS_OpenHandle( searchpath_t *search, int handle, fs_offset_t offset, fs_offset_t len );
+file_t *FS_SysOpen( const char *filepath, const char *mode );
 qboolean FS_FullPathToRelativePath( char *dst, const char *src, size_t size );
 
 //
