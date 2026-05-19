@@ -24,6 +24,9 @@ GNU General Public License for more details.
 #if XASH_WIN32
 #include <io.h>
 #endif
+#if XASH_EMSCRIPTEN
+#include <emscripten.h>
+#endif
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdlib.h>
@@ -132,6 +135,14 @@ int FS_Close( file_t *file )
 	{
 		if( close( file->handle ))
 			return EOF;
+#if XASH_EMSCRIPTEN
+		if ( file->filepath[0] != '\0' && ( ( file->mod & O_WRONLY ) || ( file->mod & O_RDWR ) ) ) {
+			EM_ASM( { Module.callbacks?.fsSyncRequired?.({
+				path: UTF8ToString($0),
+				op: 'write'
+			}) }, file->filepath );
+		}
+#endif //XASH_EMSCRIPTEN
 	}
 
 	if( file->ztk )
@@ -1028,6 +1039,12 @@ qboolean GAME_EXPORT FS_Delete( const char *path )
 		Con_Printf( "%s: failed to delete file %s (%s): %s\n", __func__, real_path, path, strerror( errno ));
 		return false;
 	}
+#if XASH_EMSCRIPTEN
+	EM_ASM({ Module.callbacks?.fsSyncRequired?.({
+		path: UTF8ToString($0),
+		op: 'delete'
+	}) }, real_path);
+#endif
 
 	return true;
 }
