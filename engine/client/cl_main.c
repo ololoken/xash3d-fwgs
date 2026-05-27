@@ -13,6 +13,7 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 */
 
+#include <inttypes.h>
 #include "common.h"
 #include "client.h"
 #include "net_encode.h"
@@ -47,18 +48,18 @@ CVAR_DEFINE( cl_draw_beams, "r_drawbeams", "1", FCVAR_CHEAT, "render beams" );
 
 static CVAR_DEFINE_AUTO( rcon_address, "", FCVAR_PRIVILEGED, "remote control address" );
 CVAR_DEFINE_AUTO( cl_timeout, "60", 0, "connect timeout (in-seconds)" );
-CVAR_DEFINE_AUTO( cl_nopred, "0", FCVAR_ARCHIVE|FCVAR_USERINFO, "disable client movement prediction" );
+CVAR_DEFINE_AUTO( cl_nopred, "0", FCVAR_USERINFO, "disable client movement prediction" );
 static CVAR_DEFINE_AUTO( cl_nodelta, "0", 0, "disable delta-compression for server messages" );
 CVAR_DEFINE( cl_crosshair, "crosshair", "1", FCVAR_ARCHIVE, "show weapon chrosshair" );
 static CVAR_DEFINE_AUTO( cl_cmdbackup, "10", FCVAR_ARCHIVE, "how many additional history commands are sent" );
 CVAR_DEFINE_AUTO( cl_showerror, "0", FCVAR_ARCHIVE, "show prediction error" );
-CVAR_DEFINE_AUTO( cl_bmodelinterp, "1", FCVAR_ARCHIVE, "enable bmodel interpolation" );
+CVAR_DEFINE_AUTO( cl_bmodelinterp, "1", 0, "enable bmodel interpolation" );
 static CVAR_DEFINE_AUTO( cl_lightstyle_lerping, "0", FCVAR_ARCHIVE, "enables animated light lerping (perfomance option)" );
 CVAR_DEFINE_AUTO( cl_idealpitchscale, "0.8", 0, "how much to look up/down slopes and stairs when not using freelook" );
-CVAR_DEFINE_AUTO( cl_nosmooth, "0", FCVAR_ARCHIVE, "disable smooth up stair climbing" );
-CVAR_DEFINE_AUTO( cl_smoothtime, "0.1", FCVAR_ARCHIVE, "time to smooth up" );
-CVAR_DEFINE_AUTO( cl_clockreset, "0.1", FCVAR_ARCHIVE, "frametime delta maximum value before reset" );
-static CVAR_DEFINE_AUTO( cl_fixtimerate, "7.5", FCVAR_ARCHIVE, "time in msec to client clock adjusting" );
+CVAR_DEFINE_AUTO( cl_nosmooth, "0", 0, "disable smooth up stair climbing" );
+CVAR_DEFINE_AUTO( cl_smoothtime, "0.1", 0, "time to smooth up" );
+CVAR_DEFINE_AUTO( cl_clockreset, "0.1", 0, "frametime delta maximum value before reset" );
+static CVAR_DEFINE_AUTO( cl_fixtimerate, "7.5", 0, "time in msec to client clock adjusting" );
 CVAR_DEFINE_AUTO( hud_fontscale, "1.0", FCVAR_ARCHIVE|FCVAR_LATCH, "scale hud font texture" );
 CVAR_DEFINE_AUTO( hud_fontrender, "0", FCVAR_ARCHIVE, "hud font render mode (0: additive, 1: holes, 2: trans)" );
 CVAR_DEFINE_AUTO( hud_scale, "0", FCVAR_ARCHIVE|FCVAR_LATCH, "scale hud at current resolution" );
@@ -94,7 +95,7 @@ static CVAR_DEFINE_AUTO( topcolor, "0", FCVAR_USERINFO|FCVAR_ARCHIVE|FCVAR_FILTE
 static CVAR_DEFINE_AUTO( bottomcolor, "0", FCVAR_USERINFO|FCVAR_ARCHIVE|FCVAR_FILTERABLE, "player bottom color" );
 CVAR_DEFINE_AUTO( rate, "25000", FCVAR_USERINFO|FCVAR_ARCHIVE|FCVAR_FILTERABLE, "player network rate" );
 
-CVAR_DEFINE_AUTO( cl_ticket_generator, "revemu2013", FCVAR_ARCHIVE, "you wouldn't steal a car" );
+CVAR_DEFINE_AUTO( cl_ticket_generator, "revemu2013", FCVAR_ARCHIVE|FCVAR_PRIVILEGED, "you wouldn't steal a car" );
 static CVAR_DEFINE_AUTO( cl_advertise_engine_in_name, "1", FCVAR_ARCHIVE|FCVAR_PRIVILEGED, "add [Xash3D] to the nickname when connecting to GoldSrc servers" );
 static CVAR_DEFINE_AUTO( cl_log_outofband, "0", FCVAR_ARCHIVE, "log out of band messages, can be useful for server admins and for engine debugging" );
 static CVAR_DEFINE_AUTO( cl_autorecord, "0", 0, "automatically start recording a demo after joining the server" );
@@ -1135,6 +1136,7 @@ static void CL_SendConnectPacket( connprotocol_t proto, int challenge )
 	}
 
 	cls.broker_wait = false;
+	cls.netchan_pending_cookie = 0;
 
 	if( proto == PROTO_GOLDSRC )
 	{
@@ -1156,7 +1158,7 @@ static void CL_SendConnectPacket( connprotocol_t proto, int challenge )
 	else
 	{
 		const char *qport = Cvar_VariableString( "net_qport" );
-		int extensions = adrtype == NA_LOOPBACK ? 0 : NET_EXT_SPLITSIZE;
+		int extensions = adrtype == NA_LOOPBACK ? 0 : ( NET_EXT_SPLITSIZE | NET_EXT_NETCHAN_COOKIE );
 		string key;
 
 		ID_GetMD5ForAddress( key, adr, sizeof( key ));
@@ -1170,6 +1172,16 @@ static void CL_SendConnectPacket( connprotocol_t proto, int challenge )
 		Info_SetValueForKey( protinfo, "uuid", key, sizeof( protinfo ));
 		Info_SetValueForKey( protinfo, "qport", qport, sizeof( protinfo ));
 		Info_SetValueForKeyf( protinfo, "ext", sizeof( protinfo ), "%d", extensions );
+
+		if( FBitSet( extensions, NET_EXT_NETCHAN_COOKIE ))
+		{
+			uint64_t a = COM_RandomLong( 0, 0xFFFF );
+			uint64_t b = COM_RandomLong( 0, 0xFFFF );
+			uint64_t c = COM_RandomLong( 0, 0xFFFF );
+			uint64_t d = COM_RandomLong( 0, 0xFFFF );
+			cls.netchan_pending_cookie = ( a << 48 ) | ( b << 32 ) | ( c << 16 ) | d;
+			Info_SetValueForKeyf( protinfo, "cookie", sizeof( protinfo ), "%016"PRIx64, cls.netchan_pending_cookie );
+		}
 
 		Netchan_OutOfBandPrint( NS_CLIENT, adr, C2S_CONNECT" %i %i \"%s\" \"%s\"\n", PROTOCOL_VERSION, challenge, protinfo, cls.userinfo );
 		Con_Printf( "Trying to connect with modern protocol\n" );
@@ -1664,10 +1676,19 @@ void CL_SetupNetchanForProtocol( connprotocol_t proto )
 
 		if( FBitSet( cls.extensions, NET_EXT_SPLITSIZE ))
 			Con_Reportf( "^2NET_EXT_SPLITSIZE enabled^7 (packet size is %d)\n", (int)cl_dlmax.value );
+
+		if( FBitSet( cls.extensions, NET_EXT_NETCHAN_COOKIE ))
+		{
+			Con_Reportf( "^2NET_EXT_NETCHAN_COOKIE enabled^7\n" );
+			SetBits( flags, NETCHAN_USE_COOKIE );
+		}
 		break;
 	}
 
 	Netchan_Setup( NS_CLIENT, &cls.netchan, net_from, Cvar_VariableInteger( "net_qport" ), NULL, pfnBlockSize, flags );
+
+	if( FBitSet( flags, NETCHAN_USE_COOKIE ))
+		Netchan_SetCookie( &cls.netchan, cls.netchan_pending_cookie );
 }
 
 /*
@@ -1822,7 +1843,7 @@ static void CL_InternetServers_f( void )
 
 	cls.internetservers_nat = cl_nat.value != 0.0f;
 	cls.internetservers_pending = true;
-	cls.internetservers_key = COM_RandomLong( 0, 0xFFFFFFFF );
+	cls.internetservers_key = COM_RandomLong( 1, 0x7FFFFFFF );
 	Q_strncpy( cls.internetservers_customfilter, Cmd_Argv( 1 ), sizeof( cls.internetservers_customfilter ));
 
 	cls.internetservers_wait = NET_MasterQuery(
@@ -2383,6 +2404,39 @@ static void CL_ClientConnect( connprotocol_t proto, const char *c, netadr_t from
 			Con_DPrintf( S_ERROR "Xash3D client connect expected but wasn't received, ignored\n");
 			CL_Disconnect_f();
 			return;
+		}
+
+		if( cls.netchan_pending_cookie != 0 )
+		{
+			int server_extensions = Q_atoi( Info_ValueForKey( Cmd_Argv( 1 ), "ext" ));
+
+			if( FBitSet( server_extensions, NET_EXT_NETCHAN_COOKIE ))
+			{
+				const char *cookie_str = Info_ValueForKey( Cmd_Argv( 1 ), "cookie" );
+
+				if( Q_strlen( cookie_str ) != 16 )
+				{
+					Con_Reportf( S_WARN "%s: missing cookie echo from %s, ignoring (possible spoof)\n", __func__, NET_AdrToString( from ));
+					return;
+				}
+
+				byte buf[8];
+				COM_HexConvert( cookie_str, 16, buf );
+
+				uint64_t echoed = 0;
+				for( int i = 0; i < 8; i++ )
+					echoed = ( echoed << 8 ) | buf[i];
+
+				if( echoed != cls.netchan_pending_cookie )
+				{
+					Con_Reportf( S_WARN "%s: invalid cookie echo from %s, ignoring (possible spoof)\n", __func__, NET_AdrToString( from ));
+					return;
+				}
+			}
+			else
+			{
+				cls.netchan_pending_cookie = 0;
+			}
 		}
 
 		cls.build_num = 0; // not used in Xash3D protocols
