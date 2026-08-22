@@ -1471,7 +1471,7 @@ static void GL2_UploadBufferData( gl2wrap_prog_t *prog, int size, GLuint start, 
 	}
 	rpglBindBufferARB( GL_ARRAY_BUFFER_ARB, gl2wrap_arrays.ptr[attr].vbo_fb[gl2wrap_arrays.ptr[attr].vbo_cycle] );
 	gl2wrap_arrays.ptr[attr].vbo_cycle = ( gl2wrap_arrays.ptr[attr].vbo_cycle + 1 ) % gl2wrap_config.cycle_buffers;
-	pglBufferDataARB( GL_ARRAY_BUFFER_ARB, end * stride, gl2wrap_arrays.ptr[attr].userptr, GL_STREAM_DRAW_ARB );
+	pglBufferDataARB( GL_ARRAY_BUFFER_ARB, ( end + 1 ) * stride, gl2wrap_arrays.ptr[attr].userptr, GL_STREAM_DRAW_ARB );
 	pglVertexAttribPointerARB( prog->attridx[attr], gl2wrap_arrays.ptr[attr].size, gl2wrap_arrays.ptr[attr].type, attr == GL2_ATTR_COLOR, gl2wrap_arrays.ptr[attr].stride, 0 );
 }
 /*
@@ -1493,7 +1493,7 @@ static void GL2_UpdatePersistentArrayBuffer( gl2wrap_prog_t *prog, int size, int
 		gl2wrap_arrays.stream_pointer = pglMapBufferRange( GL_ARRAY_BUFFER_ARB, 0, GL2_MAX_VERTS * 64, flags );
 		//i = -1;
 		//continue;
-		size = end * stride, offset = 0;
+		size = ( end + 1 ) * stride, offset = 0;
 	}
 
 	memcpy(((char *)gl2wrap_arrays.stream_pointer ) + gl2wrap_arrays.stream_counter, ((char *)gl2wrap_arrays.ptr[attr].userptr ) + offset, size );
@@ -1518,7 +1518,7 @@ static void GL2_UpdateIncrementalArrayBuffer( gl2wrap_prog_t *prog, int size, in
 
 	if( gl2wrap_arrays.stream_counter + size > GL2_MAX_VERTS * 64 )
 	{
-		size = end * stride;
+		size = ( end + 1 ) * stride;
 		offset = 0;
 		gl2wrap_arrays.stream_counter = 0;
 		inv = true;
@@ -1643,13 +1643,13 @@ static void GL2_SetupArrays( GLuint start, GLuint end )
 					gEngfuncs.Con_Printf( S_ERROR "NON-vbo array for DrawElements call, SKIPPING!\n" );
 					continue;
 				}
-				int size = ( end - start ) * stride;
+				int size = ( end - start + 1 ) * stride;
 				int offset = start * stride;
 
 				// Logical buffer start can lie before real buffer start
 				// but attrib pointer cannot have negative buffer offset
 				if( gl2wrap_arrays.stream_counter < offset )
-					size = end * stride, offset = 0;
+					size = ( end + 1 ) * stride, offset = 0;
 
 				if(( !gl2wrap_config.buf_storage && !gl2wrap_config.incremental ) || size > GL2_MAX_VERTS * 32 )
 				{
@@ -1701,7 +1701,11 @@ static void APIENTRY GL2_DrawRangeElements( GLenum mode, GLuint start, GLuint en
 
 static void APIENTRY GL2_DrawArrays( GLenum mode, GLint first, GLsizei count )
 {
-	GL2_SetupArrays( 0, count );
+	if( count <= 0 )
+		return;
+
+	// vertices referenced are [first, first + count - 1], and first may be nonzero
+	GL2_SetupArrays( 0, first + count - 1 );
 	rpglDrawArrays( mode, first, count );
 }
 
