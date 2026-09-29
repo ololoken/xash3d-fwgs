@@ -1186,6 +1186,10 @@ int EXPORT Host_Main( int argc, char **argv, const char *progname, int bChangeGa
 	static double oldtime;
 	string exename;
 
+#if XASH_ANDROID
+	pChangeGame = NULL;
+#endif
+
 #if !XASH_EMSCRIPTEN
 	if( setjmp( return_from_main_buf ))
 		return error_on_exit;
