@@ -13,6 +13,8 @@
 
 try: from fwgslib import get_flags_by_compiler
 except: from waflib.extras.fwgslib import get_flags_by_compiler
+try: from host_tool_compiler import HOST_ENV
+except: from waflib.extras.host_tool_compiler import HOST_ENV
 from waflib import Logs, TaskGen
 from waflib.Tools import c_config
 from collections import OrderedDict
@@ -46,6 +48,7 @@ NSWITCH_ENVVARS = ['DEVKITPRO']
 PSVITA_ENVVARS = ['VITASDK']
 
 PS4_ENVVARS = ['OO_PS4_TOOLCHAIN']
+PS4_LLVM_VERSION = '18' # OpenOrbis libraries are built with it, newer lld picks musl's lite_malloc
 
 PSP_ENVVARS = ['PSPDEV', 'PSPSDK', 'PSPTOOLCHAIN']
 
@@ -580,12 +583,14 @@ class PS4:
 	def __init__(self, ctx):
 		self.ctx = ctx
 
+		self.toolchain = ctx.options.PS4_TOOLCHAIN
 		for i in PS4_ENVVARS:
-			self.toolchain = os.getenv(i)
-			if self.toolchain != None:
+			if self.toolchain:
 				break
-		else:
-			ctx.fatal('Set %s environment variable pointing to the OpenOrbis PS4 toolchain!' %
+			self.toolchain = os.getenv(i)
+
+		if not self.toolchain:
+			ctx.fatal('Set the OpenOrbis PS4 toolchain path with --ps4-toolchain or %s environment variable!' %
 				' or '.join(PS4_ENVVARS))
 
 		self.toolchain = os.path.abspath(self.toolchain)
@@ -593,26 +598,27 @@ class PS4:
 		if not os.path.exists(os.path.join(self.toolchain, 'link.x')):
 			ctx.fatal('OpenOrbis toolchain not found in `%s`!' % self.toolchain)
 
-	def find_clang(self, name, fallbacks = []):
-		# OpenOrbis libc++ is built with LLVM 18, so prefer matching versioned binaries
-		for i in [name + '-18', name] + fallbacks:
-			path = self.ctx.find_program(i, mandatory=False, var='PS4_' + ''.join(c if c.isalnum() else '_' for c in name.upper()))
-			if path:
-				return path[0]
-		self.ctx.fatal('%s not found!' % name)
+		# compilers can be overridden as usual, the clang driver takes ld.lld from its own installation
+		self.cc_cmd = ctx.environ.get('CC', 'clang-' + PS4_LLVM_VERSION)
+		self.cxx_cmd = ctx.environ.get('CXX', 'clang++-' + PS4_LLVM_VERSION)
+
+	def check_compiler(self, var):
+		env = self.ctx.env
+		if env[var + '_NAME'] != 'clang' or env.CC_VERSION[0] != PS4_LLVM_VERSION:
+			self.ctx.fatal('OpenOrbis libraries need Clang %s, %s is %s %s!' % (PS4_LLVM_VERSION, var, env[var + '_NAME'], '.'.join(env.CC_VERSION)))
 
 	# target and __ORBIS__ are part of compiler command, so waf detects DEST_OS correctly
 	def cc(self):
-		return '%s --target=%s -D__ORBIS__' % (self.find_clang('clang'), self.target)
+		return '%s --target=%s -D__ORBIS__' % (self.cc_cmd, self.target)
 
 	def cxx(self):
-		return '%s --target=%s -D__ORBIS__' % (self.find_clang('clang++'), self.target)
+		return '%s --target=%s -D__ORBIS__' % (self.cxx_cmd, self.target)
 
 	def ar(self):
-		return self.find_clang('llvm-ar', ['ar'])
+		return 'llvm-ar-' + PS4_LLVM_VERSION
 
 	def strip(self):
-		return self.find_clang('llvm-strip', ['strip'])
+		return 'llvm-strip-' + PS4_LLVM_VERSION
 
 	def cflags(self, cxx = False):
 		cflags = ['--target=%s' % self.target, '--sysroot=%s' % self.toolchain]
@@ -624,13 +630,9 @@ class PS4:
 		cflags += ['-isystem', os.path.join(self.toolchain, 'include')]
 		return cflags
 
-	def lld(self):
-		# clang driver takes ld.lld from PATH, which might be newer version with different --wrap behaviour
-		return self.find_clang('ld.lld')
-
 	# they go before object list
 	def linkflags(self):
-		linkflags = ['--target=%s' % self.target, '--sysroot=%s' % self.toolchain, '-fuse-ld=%s' % self.lld(), '-nostdlib']
+		linkflags = ['--target=%s' % self.target, '--sysroot=%s' % self.toolchain, '-fuse-ld=lld', '-nostdlib']
 		# OpenOrbis images are PIE, use toolchain linker script and no ELF interpreter
 		linkflags += ['-Wl,--no-dynamic-linker', '-Wl,-m,elf_x86_64', '-Wl,--eh-frame-hdr']
 		linkflags += ['-Wl,--script,%s' % os.path.join(self.toolchain, 'link.x')]
@@ -712,8 +714,10 @@ def options(opt):
 		help='enable building for PlayStation Vita [default: %(default)s]')
 	xc.add_option('--ps4', action='store_true', dest='PS4', default = False,
 		help='enable building for PlayStation 4 with OpenOrbis toolchain [default: %(default)s]')
+	xc.add_option('--ps4-toolchain', action='store', dest='PS4_TOOLCHAIN', default = None,
+		help='path to OpenOrbis PS4Toolchain directory [default: OO_PS4_TOOLCHAIN environment variable]')
 	xc.add_option('--ps4-gamelibs', action='store', dest='PS4_GAMELIBS', default = None,
-		help='directory with PS4 game libraries from hlsdk-portable to put into the package [default: ../hlsdk-portable/build/ps4/valve]')
+		help='game directory with PS4 game libraries from hlsdk-portable to put into the package')
 	xc.add_option('--ps4-sce-sys', action='store', dest='PS4_SCE_SYS', default = None,
 		help='directory with custom icon0.png, pic0.png and pic1.png for the PS4 package [default: ./ps4_sce_sys]')
 	xc.add_option('--sailfish', action='store_true', dest='SAILFISH', default = False,
@@ -922,6 +926,9 @@ def post_compiler_cxx_configure(conf):
 	conf.msg('Target CPU', conf.env.DEST_CPU)
 	conf.msg('Target binfmt', conf.env.DEST_BINFMT)
 
+	if conf.options.PS4 and conf.variant != HOST_ENV:
+		conf.ps4.check_compiler('CXX')
+
 	if conf.options.ANDROID_OPTS:
 		if conf.android.ndk_rev == 19:
 			conf.env.CXXFLAGS_cxxshlib += ['-static-libstdc++']
@@ -936,6 +943,9 @@ def post_compiler_c_configure(conf):
 	conf.msg('Target OS', conf.env.DEST_OS)
 	conf.msg('Target CPU', conf.env.DEST_CPU)
 	conf.msg('Target binfmt', conf.env.DEST_BINFMT)
+
+	if conf.options.PS4 and conf.variant != HOST_ENV:
+		conf.ps4.check_compiler('CC')
 
 	return
 
