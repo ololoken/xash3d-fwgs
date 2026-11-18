@@ -680,6 +680,7 @@ static rserr_t VID_CreateWindow( const int input_width, const int input_height, 
 
 #if XASH_EMSCRIPTEN // chromium based browsers have a bug with dynamic alpha channel attribute update.
 	SDL_GL_SetAttribute( SDL_GL_ALPHA_SIZE, 0 );
+	SDL_SetHint( SDL_HINT_EMSCRIPTEN_ASYNCIFY, "0" );
 #endif
 
 	// by default we create window in windowed mode because we don't know

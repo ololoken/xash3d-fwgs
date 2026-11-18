@@ -326,14 +326,14 @@ def build(bld):
 		linkflags = []
 
 		if bld.env.DEST_OS == 'emscripten':
-			linkflags = [ '-sENVIRONMENT=web', '-sAUTO_JS_LIBRARIES=0',
+			linkflags = [ '-sJSPI', '-sASYNCIFY_STACK_SIZE=1mb', '-sENVIRONMENT=web', '-sAUTO_JS_LIBRARIES=0',
 						  '-lidbfs.js', '-lwebgl.js', '-lopenal.js', '-lasync.js', '-sNO_POLYFILL',
 						  '--js-library=../engine/platform/emscripten/net_emscripten.js',
 						  '-sINITIAL_MEMORY=512mb', '-sSTACK_SIZE=32mb', '-sALLOW_MEMORY_GROWTH=1',
 						  '-sMAX_WEBGL_VERSION=2', '-sMIN_WEBGL_VERSION=2', '-sFULL_ES2', # works ok with gl2shim
-						  '-sEXPORTED_RUNTIME_METHODS=cwrap,callMain,addRunDependency,removeRunDependency,readSockaddr,writeSockaddr,inetNtop4,AsciiToString,intArrayFromString,writeArrayToMemory,setValue,FS,PATH,ENV,HEAPU8,HEAP32,HEAPU32',
+						  '-sEXPORTED_RUNTIME_METHODS=cwrap,callMain,addRunDependency,removeRunDependency,readSockaddr,writeSockaddr,inetNtop4,AsciiToString,intArrayFromString,writeArrayToMemory,setValue,FS,PATH,ENV,HEAPU8,HEAP32,HEAPU32,IDBFS',
 						  '-sEXPORTED_FUNCTIONS=["_malloc", "___errno_location"]',
-						  '-sMODULARIZE']
+						  '-sMODULARIZE', '--profiling-funcs']
 
 		f(source = source,
 			target = 'xash',

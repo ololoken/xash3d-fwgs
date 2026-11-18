@@ -1176,16 +1176,6 @@ static void Sys_Quit_f( void )
 	Sys_Quit( Cmd_Argc() > 1 ? Cmd_Argv( 1 ) : "command" );
 }
 
-#if XASH_EMSCRIPTEN
-static void Host_MainLoop( void *userdata )
-{
-	double *poldtime = (double *)userdata;
-	double newtime = Sys_DoubleTime();
-	COM_Frame( newtime - *poldtime );
-	*poldtime = newtime;
-}
-#endif
-
 /*
 =================
 Host_Main
@@ -1359,23 +1349,23 @@ int EXPORT Host_Main( int argc, char **argv, const char *progname, int bChangeGa
 	// check after all configs were executed
 	HPAK_CheckIntegrity( hpk_custom_file.string );
 
-#if !XASH_EMSCRIPTEN
 #if XASH_PS4
 	// initialization is done, startup splash can be hidden with the next frames
 	PS4_AllowHideSplash( );
 #endif
 	// main window message loop
+#if XASH_EMSCRIPTEN
+	EM_ASM( { Module.callbacks?.gameReady?.() } );
+#endif
 	while( host.status != HOST_CRASHED )
 	{
+#if XASH_EMSCRIPTEN
+		emscripten_sleep(0);
+#endif
 		double newtime = Platform_DoubleTime();
 		COM_Frame( newtime - oldtime );
 		oldtime = newtime;
 	}
-#else // XASH_EMSCRIPTEN
-EM_ASM( { Module.callbacks?.gameReady?.() } );
-emscripten_set_main_loop_arg( Host_MainLoop, &oldtime, 0, false );
-#endif // XASH_EMSCRIPTEN
-
 	return 0;
 }
 

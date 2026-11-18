@@ -59,6 +59,16 @@ static void FS_CustomFree( void *data )
 	Mem_Free( data );
 }
 
+#if XASH_EMSCRIPTEN
+EM_ASYNC_JS(void, do_sync, (const char *path, char *op), {
+  await Module.callbacks?.fsSyncRequired?.({
+    path: UTF8ToString(path),
+    op: UTF8ToString(op)
+  })
+});
+
+#endif
+
 /*
 ===========
 FS_OpenReadFile
@@ -138,10 +148,7 @@ int FS_Close( file_t *file )
 			return EOF;
 #if XASH_EMSCRIPTEN
 		if ( file->filepath[0] != '\0' && ( ( file->mod & O_WRONLY ) || ( file->mod & O_RDWR ) ) ) {
-			EM_ASM( { Module.callbacks?.fsSyncRequired?.({
-				path: UTF8ToString($0),
-				op: 'write'
-			}) }, file->filepath );
+			do_sync(file->filepath, "write");
 		}
 #endif //XASH_EMSCRIPTEN
 	}
@@ -1030,10 +1037,7 @@ qboolean GAME_EXPORT FS_Delete( const char *path )
 		return false;
 	}
 #if XASH_EMSCRIPTEN
-	EM_ASM({ Module.callbacks?.fsSyncRequired?.({
-		path: UTF8ToString($0),
-		op: 'delete'
-	}) }, real_path);
+	do_sync(real_path, "delete");
 #endif
 
 	return true;
