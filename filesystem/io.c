@@ -60,10 +60,15 @@ static void FS_CustomFree( void *data )
 }
 
 #if XASH_EMSCRIPTEN
-EM_ASYNC_JS(void, do_sync, (const char *path, char *op), {
+// The page (Module.callbacks.fsSyncRequired) persists the reported path in
+// IDBFS and may return a promise. The engine stays suspended until it
+// settles. op is "write", "delete" or "rename" (oldPath set). Paths are the
+// ones passed to the OS (relative to the basedir); the page resolves them.
+EM_ASYNC_JS(void, do_sync, (const char *path, const char *op, const char *oldPath), {
   await Module.callbacks?.fsSyncRequired?.({
     path: UTF8ToString(path),
-    op: UTF8ToString(op)
+    op: UTF8ToString(op),
+    oldPath: oldPath ? UTF8ToString(oldPath) : undefined
   })
 });
 
@@ -144,13 +149,20 @@ int FS_Close( file_t *file )
 
 	if( file->handle >= 0 )
 	{
-		if( close( file->handle ))
-			return EOF;
+		int close_err = close( file->handle );
 #if XASH_EMSCRIPTEN
-		if ( file->filepath[0] != '\0' && ( ( file->mod & O_WRONLY ) || ( file->mod & O_RDWR ) ) ) {
-			do_sync(file->filepath, "write");
+		// Sync only after the bytes are in MEMFS. Always release the path copy,
+		// including when close() fails, so it is not left on a leaked file_t.
+		if( !close_err && file->filepath && ( ( file->mod & O_WRONLY ) || ( file->mod & O_RDWR ) ) )
+			do_sync( file->filepath, "write", NULL );
+		if( file->filepath )
+		{
+			Mem_Free( (void *)file->filepath );
+			file->filepath = NULL;
 		}
 #endif //XASH_EMSCRIPTEN
+		if( close_err )
+			return EOF;
 	}
 
 	if( file->ztk )
@@ -1002,6 +1014,9 @@ qboolean FS_Rename( const char *oldname, const char *newname )
 		return false;
 	}
 
+#if XASH_EMSCRIPTEN
+	do_sync( newpath, "rename", oldpath );
+#endif
 	return true;
 }
 
@@ -1037,7 +1052,7 @@ qboolean GAME_EXPORT FS_Delete( const char *path )
 		return false;
 	}
 #if XASH_EMSCRIPTEN
-	do_sync(real_path, "delete");
+	do_sync( real_path, "delete", NULL );
 #endif
 
 	return true;

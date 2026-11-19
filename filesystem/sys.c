@@ -412,8 +412,15 @@ file_t *FS_SysOpen( const char *filepath, const char *mode )
 	file->filetime = memfile ? 0 : FS_SysFileTime( filepath );
 #if XASH_EMSCRIPTEN
 	file->mod = mod | opt;
-	if ( !memfile )
-		file->filepath = filepath;
+	// FS_Open's path buffer dies when it returns. Keep an owned copy so
+	// FS_Close can tell the page which file to persist.
+	if( !memfile && ( ( mod & O_WRONLY ) || ( mod & O_RDWR ) ) )
+	{
+		size_t len = Q_strlen( filepath ) + 1;
+		char *stored = Mem_Malloc( fs_mempool, len );
+		Q_strncpy( stored, filepath, len );
+		file->filepath = stored;
+	}
 #endif
 	file->ungetc = EOF;
 	file->handle = fd;
